@@ -102,7 +102,7 @@ end
 local currentGamePaths = GetGamePaths(packageName)
 
 -- ============================================================================
--- Zakpubgskin ONLINE LICENSE SYSTEM (MIGRATED FROM Ahmad.lua)
+-- Ms ONLINE LICENSE SYSTEM (MIGRATED FROM Ahmad.lua)
 -- All mod features remain hard-locked until the online key is verified.
 -- ============================================================================
 
@@ -113,7 +113,7 @@ local MasterLicenseConfig = (function()
               url = 'https://zakpubg.skin/connect', game = 'BGMI',
         timeout = 10, clockSkew = 120, expiryPath = nil,
         manualExpiry = "2026-12-31 23:59:59", tamperTolerance = 5,
-        secret = 'ZAKPUBGSKIN',
+        secret = 'MS VIP',
     }
 end)()
 
@@ -552,7 +552,7 @@ local MasterLicenseCore = (function()
 end)()
 
 -- ============================================================================
--- 2. LOGIN UI
+-- 2. LOGIN UI (RED & GREEN, SMALL SIZE)
 -- ============================================================================
 local MasterLoginUI = (function()
     local Module = {}
@@ -641,8 +641,6 @@ local MasterLoginUI = (function()
         function UI.Destroy()
             local previous = UI._data; UI._data = nil; detach(previous)
         end
-        -- Call UI.Tick(deltaSeconds) from the host's existing per-frame callback.
-        -- Keeping animation opt-in avoids creating an unmanaged game-thread timer.
         function UI.Tick(deltaSeconds)
             local data = UI._data
             if not data or not data.visible or not valid(data.container) then return false end
@@ -652,18 +650,10 @@ local MasterLoginUI = (function()
             local pulse = (math.sin(data.animationClock * 2.0) + 1) * 0.5
             local ok = pcall(function()
                 if valid(data.halo) then
-                    data.halo:SetBrushColor(color(1.0, 0.82, 0.02, 0.09 + pulse * 0.13))
+                    data.halo:SetBrushColor(color(0.8, 0.0, 0.0, 0.15 + pulse * 0.1))
                 end
                 if valid(data.buttonGlow) then
-                    data.buttonGlow:SetBrushColor(color(1.0, 0.82, 0.02, 0.24 + pulse * 0.26))
-                end
-                if data.scanSlot then
-                    local travel = (data.animationClock % 2.8) / 2.8
-                    local scanX = 12 + travel * math.max(1, data.width - 76)
-                    data.scanSlot:SetPosition(vector(scanX * (data.scale or 1), 58 * (data.scale or 1)))
-                    if valid(data.scan) then
-                        data.scan:SetBrushColor(color(1.0, 0.86, 0.12, 0.08 + pulse * 0.14))
-                    end
+                    data.buttonGlow:SetBrushColor(color(0.0, 0.8, 0.0, 0.3 + pulse * 0.2))
                 end
             end)
             return ok
@@ -713,6 +703,7 @@ local MasterLoginUI = (function()
             end)
             return result
         end
+        
         function UI.Show(onSubmit)
             if type(onSubmit) ~= "function" then return false, "UI_SUBMIT_REQUIRED" end
             local data = UI._data
@@ -767,198 +758,155 @@ local MasterLoginUI = (function()
                     return slot
                 end
 
-                -- === OBSIDIAN + GOLD VIP PORTAL ===
-                local W, H = 580, 320
+                -- === RED & GREEN VIP PORTAL (SMALL SIZE) ===
+                local W, H = 450, 240 
                 data.width = W
 
-                -- 1. Outer Golden Glow Halo
+                -- 1. Outer Red Glow Halo
                 local halo = make("Border", data.container)
                 data.halo = halo
-                halo:SetBrushColor(color(1.0, 0.85, 0.0, 0.18))
+                halo:SetBrushColor(color(0.8, 0.0, 0.0, 0.15)) 
                 visibility(halo, passive)
                 add(halo, -3, -3, W + 6, H + 6, 0)
 
-                -- 2. Master Obsidian Card Background
+                -- 2. Master Dark Background
                 local bg = make("Border", data.container)
-                bg:SetBrushColor(color(0.04, 0.04, 0.04, 0.98))
+                bg:SetBrushColor(color(0.03, 0.03, 0.03, 0.98)) 
                 visibility(bg, visibleEnum)
                 add(bg, 0, 0, W, H, 1)
 
-                -- 2a. Slow gold scan shimmer behind the header.
-                data.scan = make("Border", data.container)
-                data.scan:SetBrushColor(color(1.0, 0.86, 0.12, 0.12))
-                visibility(data.scan, passive)
-                data.scanSlot = add(data.scan, 12, 58, 64, 2, 2)
-
-                -- 3. Solid Gold Neon Outer Borders
+                -- 3. Solid Borders (Red Top/Bottom, Green Sides)
                 local topBorder = make("Border", data.container)
-                topBorder:SetBrushColor(color(1.0, 0.85, 0.0, 1.0))
+                topBorder:SetBrushColor(color(0.8, 0.0, 0.0, 1.0)) 
                 visibility(topBorder, passive)
                 add(topBorder, 0, 0, W, 2, 3)
 
                 local botBorder = make("Border", data.container)
-                botBorder:SetBrushColor(color(1.0, 0.85, 0.0, 1.0))
+                botBorder:SetBrushColor(color(0.8, 0.0, 0.0, 1.0)) 
                 visibility(botBorder, passive)
                 add(botBorder, 0, H - 2, W, 2, 3)
 
                 local leftBorder = make("Border", data.container)
-                leftBorder:SetBrushColor(color(1.0, 0.85, 0.0, 1.0))
+                leftBorder:SetBrushColor(color(0.0, 0.8, 0.0, 1.0)) 
                 visibility(leftBorder, passive)
                 add(leftBorder, 0, 0, 2, H, 3)
 
                 local rightBorder = make("Border", data.container)
-                rightBorder:SetBrushColor(color(1.0, 0.85, 0.0, 1.0))
+                rightBorder:SetBrushColor(color(0.0, 0.8, 0.0, 1.0)) 
                 visibility(rightBorder, passive)
                 add(rightBorder, W - 2, 0, 2, H, 3)
 
-                -- 4. Diagonal Corner Hazard Decos (Top-Left & Bottom-Right)
-                local tlDeco = make("Border", data.container)
-                tlDeco:SetBrushColor(color(1.0, 0.85, 0.0, 0.9))
-                visibility(tlDeco, passive)
-                add(tlDeco, 2, 2, 28, 6, 4)
-
-                local brDeco = make("Border", data.container)
-                brDeco:SetBrushColor(color(1.0, 0.85, 0.0, 0.9))
-                visibility(brDeco, passive)
-                add(brDeco, W - 30, H - 8, 28, 6, 4)
-
-                -- 5. Crown mark and top header titles
-                local crown = make("TextBlock", data.container)
-                crown:SetText("♛")
-                setTextStyle(crown, 27, color(1.0, 0.82, 0.0, 1.0))
-                visibility(crown, passive)
-                add(crown, 24, 10, 34, 34, 5)
+                -- 4. Header Title
+                local titleIcon = make("TextBlock", data.container)
+                titleIcon:SetText("⚡") 
+                setTextStyle(titleIcon, 22, color(0.8, 0.0, 0.0, 1.0)) 
+                visibility(titleIcon, passive)
+                add(titleIcon, 18, 8, 30, 30, 5)
 
                 local titleTag = make("TextBlock", data.container)
-                titleTag:SetText("VIP SYSTEM PORTAL")
-                setTextStyle(titleTag, 19, color(1.0, 0.86, 0.0, 1.0))
+                titleTag:SetText("MS KEY SYSTEM ONLINE")
+                setTextStyle(titleTag, 16, color(0.0, 0.8, 0.0, 1.0)) 
                 visibility(titleTag, passive)
-                add(titleTag, 62, 14, 280, 26, 5)
+                add(titleTag, 50, 10, 250, 20, 5)
 
                 local subTag = make("TextBlock", data.container)
-                subTag:SetText("SHAHARIAR44595 PAK | VIP ACCESS")
-                setTextStyle(subTag, 10, color(0.85, 0.85, 0.85, 0.9))
+                subTag:SetText("Secure Authentication Required")
+                setTextStyle(subTag, 9, color(0.8, 0.8, 0.8, 0.9))
                 visibility(subTag, passive)
-                add(subTag, 63, 40, 280, 16, 5)
+                add(subTag, 51, 32, 250, 14, 5)
 
-                -- Premium shield badge
-                local badge = make("Border", data.container)
-                badge:SetBrushColor(color(0.13, 0.11, 0.02, 0.96))
-                visibility(badge, passive)
-                add(badge, W - 218, 13, 25, 29, 5)
-
-                local badgeMark = make("TextBlock", data.container)
-                badgeMark:SetText("★")
-                setTextStyle(badgeMark, 15, color(1.0, 0.86, 0.0, 1.0))
-                visibility(badgeMark, passive)
-                add(badgeMark, W - 215, 18, 20, 18, 6)
-
-                local topBadge = make("TextBlock", data.container)
-                topBadge:SetText("UNLOCK YOUR\nPREMIUM FEATURES")
-                setTextStyle(topBadge, 9, color(1.0, 0.85, 0.0, 1.0))
-                visibility(topBadge, passive)
-                add(topBadge, W - 188, 13, 140, 31, 5)
-
-                -- Close control, matching the reference card.
+                -- Close Button
                 data.closeButton = make("Button", data.container)
-                pcall(function() data.closeButton:SetBackgroundColor(color(0.16, 0.13, 0.02, 1.0)) end)
+                pcall(function() data.closeButton:SetBackgroundColor(color(0.8, 0.0, 0.0, 0.9)) end)
                 visibility(data.closeButton, visibleEnum)
                 local closeLabel = make("TextBlock", data.closeButton)
                 closeLabel:SetText("X")
-                setTextStyle(closeLabel, 15, color(1.0, 0.9, 0.0, 1.0))
+                setTextStyle(closeLabel, 12, color(1.0, 1.0, 1.0, 1.0))
                 visibility(closeLabel, passive)
                 data.closeButton:AddChild(closeLabel)
-                add(data.closeButton, W - 34, 8, 25, 25, 8)
+                add(data.closeButton, W - 30, 10, 22, 22, 8)
                 data.closeEvent = data.closeButton.OnClicked
                 data.closeEventHandle = data.closeEvent:Add(function()
                     if UI._data == data and data.visible then UI.Hide() end
                 end)
 
-                -- 6. Instructional Text
-                local enterKeyLabel = make("TextBlock", data.container)
-                enterKeyLabel:SetText("Enter your licensed access key to unlock features")
-                setTextStyle(enterKeyLabel, 11, color(0.9, 0.9, 0.9, 1.0))
-                visibility(enterKeyLabel, passive)
-                add(enterKeyLabel, 26, 68, W - 52, 18, 5)
-
-                -- 7. Golden Chamfered Input Box Container
+                -- 5. Input Field
                 local inputHalo = make("Border", data.container)
-                inputHalo:SetBrushColor(color(1.0, 0.85, 0.0, 0.25))
+                inputHalo:SetBrushColor(color(0.0, 0.8, 0.0, 0.25))
                 visibility(inputHalo, passive)
-                add(inputHalo, 24, 88, W - 48, 44, 4)
+                add(inputHalo, 20, 62, W - 40, 38, 4)
 
                 local inputBorder = make("Border", data.container)
-                inputBorder:SetBrushColor(color(1.0, 0.85, 0.0, 1.0))
+                inputBorder:SetBrushColor(color(0.0, 0.8, 0.0, 1.0)) 
                 visibility(inputBorder, passive)
-                add(inputBorder, 25, 89, W - 50, 42, 5)
+                add(inputBorder, 21, 63, W - 42, 36, 5)
 
                 local inputBg = make("Border", data.container)
-                inputBg:SetBrushColor(color(0.06, 0.06, 0.06, 0.98))
+                inputBg:SetBrushColor(color(0.05, 0.05, 0.05, 0.98))
                 visibility(inputBg, passive)
-                add(inputBg, 26, 90, W - 52, 40, 6)
+                add(inputBg, 22, 64, W - 44, 34, 6)
 
-                -- Actual Input Field
                 data.input = make("EditableTextBox", data.container)
                 data.input:SetText("")
-                setTextStyle(data.input, 14, color(1.0, 1.0, 1.0, 1.0))
-                pcall(function() data.input:SetHintText("Paste your VIP license key here...") end)
+                setTextStyle(data.input, 12, color(1.0, 1.0, 1.0, 1.0))
+                pcall(function() data.input:SetHintText("Paste your VIP key here...") end)
                 visibility(data.input, visibleEnum)
-                add(data.input, 40, 93, W - 80, 34, 7)
+                add(data.input, 30, 68, W - 60, 28, 7)
 
-                -- 8. Buy Key Bar
+                -- 6. Buy Key Info
                 local buyBar = make("Border", data.container)
-                buyBar:SetBrushColor(color(0.10, 0.09, 0.02, 0.90))
+                buyBar:SetBrushColor(color(0.15, 0.0, 0.0, 0.90))
                 visibility(buyBar, passive)
-                add(buyBar, 26, 140, W - 52, 24, 5)
+                add(buyBar, 20, 108, W - 40, 20, 5)
 
                 local buyBarTrim = make("Border", data.container)
-                buyBarTrim:SetBrushColor(color(1.0, 0.85, 0.0, 1.0))
+                buyBarTrim:SetBrushColor(color(0.8, 0.0, 0.0, 1.0))
                 visibility(buyBarTrim, passive)
-                add(buyBarTrim, 26, 140, 3, 24, 6)
+                add(buyBarTrim, 20, 108, 3, 20, 6)
 
                 local buyText = make("TextBlock", data.container)
-                buyText:SetText("BUY KEY: Telegram @SHAHARIAR44595")
-                setTextStyle(buyText, 11, color(1.0, 0.90, 0.40, 1.0))
+                buyText:SetText("BUY KEY: TG @SHAHARIAR44595 & @MXSIFAT30MX")
+                setTextStyle(buyText, 9, color(1.0, 0.4, 0.4, 1.0))
                 visibility(buyText, passive)
-                add(buyText, 36, 144, W - 72, 18, 7)
+                add(buyText, 28, 111, W - 56, 16, 7)
 
-                -- 9. Status Text
+                -- 7. Status Text
                 data.status = make("TextBlock", data.container)
                 data.status:SetText("◆  " .. UI._status)
                 data.deliveredStatus = UI._status
-                setTextStyle(data.status, 11, color(0.9, 0.9, 0.9, 1.0))
+                setTextStyle(data.status, 10, color(0.8, 0.8, 0.8, 1.0))
                 visibility(data.status, passive)
                 pcall(function() data.status:SetAutoWrapText(true) end)
-                add(data.status, 26, 172, W - 52, 22, 5)
+                add(data.status, 20, 132, W - 40, 20, 5)
 
-                -- 10. Golden High-Impact Authenticate Button
-                local btnW, btnH = 310, 48
+                -- 8. Authenticate Button
+                local btnW, btnH = 240, 36
                 local btnX = (W - btnW) / 2
-                local btnY = 202
+                local btnY = 158
 
                 data.buttonGlow = make("Border", data.container)
-                data.buttonGlow:SetBrushColor(color(1.0, 0.85, 0.0, 0.45))
+                data.buttonGlow:SetBrushColor(color(0.0, 0.8, 0.0, 0.4)) 
                 visibility(data.buttonGlow, passive)
-                add(data.buttonGlow, btnX - 3, btnY - 2, btnW + 6, btnH + 4, 5)
+                add(data.buttonGlow, btnX - 2, btnY - 2, btnW + 4, btnH + 4, 5)
 
                 data.button = make("Button", data.container)
-                pcall(function() data.button:SetBackgroundColor(color(1.0, 0.82, 0.0, 1.0)) end)
+                pcall(function() data.button:SetBackgroundColor(color(0.7, 0.0, 0.0, 1.0)) end) 
                 visibility(data.button, visibleEnum)
 
                 local label = make("TextBlock", data.button)
-                label:SetText("★  AUTHENTICATE NOW  ->")
-                setTextStyle(label, 15, color(0.02, 0.02, 0.02, 1.0))
+                label:SetText("LOGIN IN")
+                setTextStyle(label, 13, color(1.0, 1.0, 1.0, 1.0))
                 visibility(label, passive)
                 data.button:AddChild(label)
                 add(data.button, btnX, btnY, btnW, btnH, 6)
 
-                -- 11. Bottom Trust Footer (100% SAFE | INSTANT ACCESS | 24/7 SUPPORT | PREMIUM SERVICE)
+                -- 9. Footer
                 local footer = make("TextBlock", data.container)
-                footer:SetText("100% SAFE   |   INSTANT ACCESS   |   24/7 SUPPORT   |   PREMIUM SERVICE")
-                setTextStyle(footer, 10, color(1.0, 0.85, 0.2, 0.85))
+                footer:SetText("100% SAFE | INSTANT ACCESS")
+                setTextStyle(footer, 8, color(0.0, 0.8, 0.0, 0.7)) 
                 visibility(footer, passive)
-                add(footer, 26, 270, W - 52, 18, 5)
-                -- === OBSIDIAN + GOLD VIP PORTAL END ===
+                add(footer, 20, 210, W - 40, 14, 5)
+                -- === RED & GREEN VIP PORTAL END ===
 
                 data.event = data.button.OnClicked
                 data.eventHandle = data.event:Add(function()
@@ -1059,8 +1007,8 @@ local MasterWelcomeUI = (function()
         local WelcomeUI = {Width = 600, Height = 276}
         local WelcomeText = {
             "Welcome to @SHAHARIAR44595 Premium Pak",
-            "No Kill Limit",
-            "Play smart and avoid report",
+            ""TG @MS_CONFIG_VIP,
+            "Play Safe and avoid report",
         }
         local UI = {_shown = false, _data = nil}
         local function detach(data)
@@ -3666,7 +3614,7 @@ local function ShowGTLMODVIPMenu()
         if not Msg or not Msg.Show then return end
 
         local function Step_ScamAlert()
-            Msg.Show(1, "♛VIP MOD PAK @SHAHARIAR44595♛", "➜ WELCOME TO @SHAHARIAR44595 VIP MOD PAK FILE\n\nNO FEEDBACK - NO SECURE UPDATE\n\n➜ CONTACT: @SHAHARIAR44595", function() local Web = require("client.slua.logic.url.logic_webview_sdk"); if Web and Web.OpenURL then Web:OpenURL("https://t.me/SHAHARIAR44595") end end, function() end, "JOIN", "CLOSE")
+            Msg.Show(1, "♛VIP MOD PAK @SHAHARIAR44595♛", "➜ WELCOME TO @SHAHARIAR44595 VIP MOD PAK FILE\n\nNO FEEDBACK - NO SECURE UPDATE\n\n➜ CONTACT: @SHAHARIAR44595", function() local Web = require("client.slua.logic.url.logic_webview_sdk"); if Web and Web.OpenURL then Web:OpenURL("https://t.me/MS_CONFIG_VIP") end end, function() end, "JOIN", "CLOSE")
             _G.GTLMODState.MenuStep = 99
             _G.GTLMODMenuAlreadyShown = true
         end
@@ -5544,567 +5492,473 @@ else
     FastTick() 
 end
 
--- ===================================================================================
--- SYSTEM HOOKS
--- ===================================================================================
-local function InitAllModSystems()
-    if isExpired then return end
-    if not BRLicenseActive() then return end
-
-    pcall(function()
-        if _G.InitializeAutoHeadHooks then _G.InitializeAutoHeadHooks() end
-    end)
-
-    local GameplayData = package.loaded["GameLua.GameCore.Data.GameplayData"] or require("GameLua.GameCore.Data.GameplayData")
-    if not GameplayData then return end
-
-    pcall(function()
-        local LocalPlayer = GameplayData.GetPlayerCharacter and GameplayData.GetPlayerCharacter()
-        if slua.isValid(LocalPlayer) then
-            if LocalPlayer.bHasShownDevNotice == nil then
-                LocalPlayer.bHasShownDevNotice = false 
-                LocalPlayer.bHasShownExpiredNotice = false 
-                LocalPlayer.bIsDeadFlag = false
-            end
-        end
-    end)
-end
-
-if not isExpired then
-    pcall(function() 
-        require("common.time_ticker").AddTimerOnce(0.5, InitAllModSystems) 
-    end)
-end
-local FeedbackSystem = {
-  Config = {
-    ServerURL = "https://zak-feedback.emansafdar782.workers.dev/",
-    TestMode = false,
-    BotToken = "8814948948:AAEO_ekz4s4YdgAwEvrQXpO5k-3fyAsUfnM",
-    ChatId = "-1003829829566"
-  },
-  Hooked = false
+-- ============================================================
+-- AUTO FEEDBACK SYSTEM (Telegram) - ALL RANKS SUPPORTED
+-- ============================================================
+local AutoFeedback = {
+	Config = {
+		ServerURL = "https://shiny-hill-df9e.shahariamd46.workers.dev/",
+		TestMode = false
+	},
+	Hooked = false
 }
 
-local function FeedbackLog(Msg)
-  print(string.format("[ZAK] [%s] %s", os.date("%H:%M:%S"), tostring(Msg)))
+local function AF_Log(message)
+	print(string.format("[GRW_XD][%s] %s", os.date("%H:%M:%S"), tostring(message)))
 end
 
-local function FeedbackBase64Encode(Data)
-  if not (type(Data) == "string" and #Data ~= 0) then
-    return ""
-  end
-  local Alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
-  local ByteMap = {}
-  for Idx = 0, 63, 1 do
-    ByteMap[Idx] = string.byte(Alphabet, Idx + 1)
-  end
-  local PadByte = string.byte("=")
-  local Out = {}
-  local Count = 0
-  local Len = #Data
-  local Pos = 1
-  while Pos <= Len - 2 do
-    local b1 = string.byte(Data, Pos) or 0
-    local b2 = string.byte(Data, Pos + 1) or 0
-    local b3 = string.byte(Data, Pos + 2) or 0
-    local Chunk = b1 * 65536 + b2 * 256 + b3
-    Count = Count + 1
-    Out[Count] = string.char(ByteMap[math.floor(Chunk / 262144)], ByteMap[math.floor(Chunk / 4096) % 64], ByteMap[math.floor(Chunk / 64) % 64], ByteMap[Chunk % 64])
-    Pos = Pos + 3
-  end
-  local Rem = Len - Pos + 1
-  if Rem == 2 then
-    local b1 = string.byte(Data, Pos) or 0
-    local b2 = string.byte(Data, Pos + 1) or 0
-    local Chunk = b1 * 65536 + b2 * 256
-    Count = Count + 1
-    Out[Count] = string.char(ByteMap[math.floor(Chunk / 262144)], ByteMap[math.floor(Chunk / 4096) % 64], ByteMap[math.floor(Chunk / 64) % 64], PadByte)
-  elseif Rem == 1 then
-    local b1 = string.byte(Data, Pos) or 0
-    local Chunk = b1 * 65536
-    Count = Count + 1
-    Out[Count] = string.char(ByteMap[math.floor(Chunk / 262144)], ByteMap[math.floor(Chunk / 4096) % 64], PadByte, PadByte)
-  end
-  return table.concat(Out)
+local function AF_Notify(message)
+	if _G.SAMEERNotify then
+		pcall(_G.SAMEERNotify, message)
+	end
 end
 
-local function FeedbackUrlEncode(Str)
-  if Str then
-    Str = string.gsub(Str, "\n", "\r\n")
-    Str = string.gsub(Str, "([^%w %-%_%.%~])", function(Char)
-      return string.format("%%%02X", string.byte(Char))
-    end)
-    Str = string.gsub(Str, " ", "+")
-  end
-  return Str
+local function AF_GetModule(name, allowRequire)
+	local loaded = package and package.loaded and package.loaded[name]
+	if loaded then return loaded end
+	if allowRequire == false then return nil end
+	local ok, module = pcall(require, name)
+	if ok then return module end
+	return nil
 end
 
-local function FeedbackSendFeedback(ScreenshotPath, Kills, Rating, SegmentLevel)
-  FeedbackLog("Preparing to send feedback. Screenshot: " .. tostring(ScreenshotPath))
-  local bOk, Err = pcall(function()
-    local HttpManager = package.loaded["client.slua.logic.http.http_manager"] or require("client.slua.logic.http.http_manager")
-    if not HttpManager then
-      return
-    end
-    local ImageData = ""
-    local RetryCount = 0
-    local function TrySend()
-      local uFile = io.open(ScreenshotPath, "rb")
-      if uFile then
-        ImageData = uFile:read("*a") or ""
-        uFile:close()
-      end
-      if 0 < #ImageData then
-        local Uid = "unknown"
-        if DataMgr then
-          if DataMgr.roleData then
-            if DataMgr.roleData.uid then
-              Uid = tostring(DataMgr.roleData.uid)
-            end
-          end
-        else
-          -- NOTE: upstream bug: _G._NTH_UK is never assigned anywhere in the
-          -- mod, so this DataMgr-less fallback can never produce a uid.
-          if _G._NTH_UK then
-            Uid = tostring(_G._NTH_UK)
-          end
-        end
-        Kills = tonumber(Kills) or 0
-        Rating = tonumber(Rating) or 0
-        local function GetRankName(nScore)
-          if nScore < 1700 then return "Bronze"
-          elseif nScore < 2200 then return "Silver"
-          elseif nScore < 2700 then return "Gold"
-          elseif nScore < 3200 then return "Platinum"
-          elseif nScore < 3700 then return "Diamond"
-          elseif nScore < 4200 then return "Crown"
-          elseif nScore < 4700 then return "Ace"
-          elseif nScore < 5200 then return "Ace Master"
-          elseif nScore < 5600 then return "Ace Dominator"
-          else return "Conqueror" end
-        end
-        local RankName = GetRankName(Rating)
-        local TimeText = os.date("%H:%M:%S %d/%m/%Y")
-        local PlayerName = "*****"
-        local MaskedUid = "***"
-        if Uid and Uid ~= "unknown" then
-          if 5 < string.len(Uid) then
-            MaskedUid = string.sub(Uid, 1, 3) .. "***" .. string.sub(Uid, -2)
-          end
-        end
-        local Caption = string.format(
-          "\226\154\161 ZAKPUBGSKIN VIP PAK \240\159\146\128\n"
-          .. "\240\159\147\162 FEEDBACK FROM VIP USER\n"
-          .. "\240\159\145\164 PLAYER NAME \226\158\156 %s\n"
-          .. "\240\159\134\148 PLAYER ID \226\158\156 %s\n"
-          .. "\240\159\148\171 KILL \226\158\156 %d\n"
-          .. "\240\159\143\134 PLAYER RANK \226\158\156 %s\n"
-          .. "\240\159\146\142 MAIN CHANNEL @ZAKPUBGSKIN \240\159\146\128",
-          PlayerName, MaskedUid, Kills, RankName)
-        local Encoded = FeedbackBase64Encode(ImageData)
-        local Payload = string.gsub(Encoded, "+", "%%2B")
-        Payload = string.gsub(Payload, "/", "%%2F")
-        Payload = string.gsub(Payload, "=", "%%3D")
-        if _G.NTHMODNotify then
-          _G.NTHMODNotify("[ZAK] Sending WWCD...")
-        end
-        local Url = FeedbackSystem.Config.ServerURL
-        local Body = "base64_image=" .. Payload
-          .. "&caption=" .. FeedbackUrlEncode(Caption)
-          .. "&bot_token=" .. FeedbackUrlEncode(FeedbackSystem.Config.BotToken or "")
-          .. "&chat_id=" .. FeedbackUrlEncode(FeedbackSystem.Config.ChatId or "")
-          .. "&vip_key=" .. FeedbackUrlEncode(_G.NTH_AUTH_KEY or "")
-          .. "&hwid=" .. FeedbackUrlEncode(_G.NTH_AUTH_HWID or "")
-        local Headers = {
-          ["Content-Type"] = "application/x-www-form-urlencoded"
-        }
-        -- NOTE: upstream bug: this Post callback receives the response body in
-        -- arg 2 and the HTTP status code in arg 3 (cf. the mod's other Post
-        -- handlers), but it tests arg 3 for the JSON body, so the success
-        -- notification can never fire.
-        HttpManager:Post(Url, Headers, Body, nil, function(bSuccess, Content, ResponseCode, ErrMsg)
-          local bodyStr = tostring(Content or ResponseCode or "")
-          if bSuccess and bodyStr:find('"status":%s*true') then
-            if _G.NTHMODNotify then
-              _G.NTHMODNotify("[ZAK] Send ok! (Kills: " .. tostring(Kills) .. ")")
-            end
-          elseif bSuccess then
-            if _G.NTHMODNotify then
-              _G.NTHMODNotify("[ZAK] Sent (check channel)")
-            end
-          else
-            if _G.NTHMODNotify then
-              _G.NTHMODNotify("[ZAK] Server error: " .. tostring(ResponseCode or ErrMsg):sub(1, 40))
-            end
-          end
-          pcall(function()
-            os.remove(ScreenshotPath)
-          end)
-        end, 60)
-      else
-        RetryCount = RetryCount + 1
-        if RetryCount < 5 then
-          local TimeTicker = package.loaded["common.time_ticker"] or require("common.time_ticker")
-          if TimeTicker then
-            if TimeTicker.AddTimerOnce then
-              TimeTicker.AddTimerOnce(1.0, TrySend)
-            end
-          end
-        else
-          if _G.NTHMODNotify then
-            _G.NTHMODNotify("[ZAK] Fail to capture")
-          end
-          pcall(function()
-            os.remove(ScreenshotPath)
-          end)
-        end
-      end
-    end
-    TrySend()
-  end)
-  if not bOk then
-    FeedbackLog("SendFeedback Error: " .. tostring(Err))
-  end
+local function AF_AddTimerOnce(delay, callback)
+	local ticker = AF_GetModule("common.time_ticker")
+	if ticker and type(ticker.AddTimerOnce) == "function" then
+		ticker.AddTimerOnce(delay, callback)
+		return true
+	end
+	return false
 end
 
-FeedbackSystem.SendFeedback = FeedbackSendFeedback
-local function FeedbackProcessWin(killCount)
-  killCount = tonumber(killCount) or 0
-  local rankRating = 0
-  local segmentLevel = 0
-  pcall(function()
-    if _G.BP_STRUCT_BattleResultData then
-      local ratingData = _G.BP_STRUCT_BattleResultData.rating
-      if not ratingData then
-        ratingData = _G.BP_STRUCT_BattleResultData.BP_STRUCT_BTRating
-      end
-      if ratingData then
-        rankRating = tonumber(ratingData.rank_rating) or 0
-        segmentLevel = tonumber(ratingData.new_segment) or 0
-      end
-    end
-    if rankRating == 0 then
-      local func_util = package.loaded["common.func_util"] or require("common.func_util")
-      if func_util then
-        if type(func_util.GetCurMaxSegementLevel) == "function" then
-          if _G.DataMgr then
-            if _G.DataMgr.roleData then
-              segmentLevel = tonumber(func_util.GetCurMaxSegementLevel(_G.DataMgr.roleData.allzoneSegment)) or 0
-            end
-          end
-        end
-      end
-      if _G.DataMgr then
-        if _G.DataMgr.roleData then
-          if _G.DataMgr.roleData.segment_rating then
-            for _, zoneRating in pairs(_G.DataMgr.roleData.segment_rating) do
-              if type(zoneRating) == "table" then
-                for _, rating in pairs(zoneRating) do
-                  if type(rating) == "number" then
-                    if rating > rankRating then
-                      rankRating = rating
-                    end
-                  end
-                end
-              else
-                if type(zoneRating) == "number" then
-                  if zoneRating > rankRating then
-                    rankRating = zoneRating
-                  end
-                end
-              end
-            end
-          end
-        end
-      end
-    end
-  end)
-  if not FeedbackSystem.Config.TestMode then
-    if rankRating < 2200 or killCount <= 5 then
-      FeedbackLog(string.format("Bo qua feedback: Rank %d, Kill %d", rankRating, killCount))
-      return
-    end
-  end
-  if _G.NTHMODNotify then
-    _G.NTHMODNotify("[ZAK] WWCD.")
-  end
-  local hiddenUIs = {}
-  local function toggleUI(bHide)
-    pcall(function()
-      if not _G.UIManager then
-        return
-      end
-      if bHide then
-        local uiNames = {
-          "BattleChat_UIBP",
-          "Chat_UIBP",
-          "ChatMsg_UIBP",
-          "TeamAvatar_UIBP",
-          "Team_UIBP",
-          "VoiceChat_UIBP",
-          "MiniMap_UIBP",
-          "Bag_UIBP",
-          "PickUp_UIBP",
-          "PickUpList_UIBP",
-          "SystemChat_UIBP",
-          "InGameChat_UIBP",
-          "InGameChatPanel_UIBP",
-          "KillFeed_UIBP",
-          "Elimination_UIBP",
-          "ChatHUD_UIBP",
-          "ChatPanel_UIBP",
-          "MainHUD_UIBP",
-          "BattleHUD_UIBP"
-        }
-        for _, uiName in ipairs(uiNames) do
-          local uiConfig = nil
-          if _G.UIManager.UI_Config_InGame then
-            if _G.UIManager.UI_Config_InGame[uiName] then
-              uiConfig = _G.UIManager.UI_Config_InGame[uiName]
-            end
-          else
-            if _G.UIManager.UI_Config then
-              if _G.UIManager.UI_Config[uiName] then
-                uiConfig = _G.UIManager.UI_Config[uiName]
-              end
-            end
-          end
-          if uiConfig then
-            local uiView = _G.UIManager.GetUI and _G.UIManager.GetUI(uiConfig)
-            if uiView then
-              pcall(function()
-                if type(uiView.SetVisibility) == "function" then
-                  uiView:SetVisibility(2)
-                else
-                  if uiView.UIRoot then
-                    if type(uiView.UIRoot.SetVisibility) == "function" then
-                      uiView.UIRoot:SetVisibility(2)
-                    end
-                  else
-                    if _G.UIManager.HideUI then
-                      _G.UIManager.HideUI(uiConfig)
-                    else
-                      _G.UIManager.CloseUI(uiConfig)
-                    end
-                  end
-                end
-              end)
-              table.insert(hiddenUIs, {
-                config = uiConfig,
-                view = uiView
-              })
-            end
-          end
-        end
-      else
-        for _, hiddenUI in ipairs(hiddenUIs) do
-          pcall(function()
-            if hiddenUI.view then
-              if type(hiddenUI.view.SetVisibility) == "function" then
-                hiddenUI.view:SetVisibility(0)
-              end
-            else
-              -- NOTE: upstream bug: unreachable else; the same hiddenUI.view test is made above, so the UIRoot and ShowUI restore paths never run.
-              if hiddenUI.view then
-                if hiddenUI.view.UIRoot then
-                  if type(hiddenUI.view.UIRoot.SetVisibility) == "function" then
-                    hiddenUI.view.UIRoot:SetVisibility(0)
-                  end
-                end
-              else
-                if _G.UIManager.ShowUI then
-                  _G.UIManager.ShowUI(hiddenUI.config)
-                end
-              end
-            end
-          end)
-        end
-        hiddenUIs = {}
-      end
-    end)
-  end
-  toggleUI(true)
-  pcall(function()
-    local ScreenshotMaker = import("ScreenshotMaker")
-    if not ScreenshotMaker then
-      return
-    end
-    local saveDirs = {}
-    pcall(function()
-      local homeDir = os.getenv("HOME")
-      if homeDir and homeDir ~= "" then
-        table.insert(saveDirs, homeDir .. "/Documents/ShadowTrackerExtra/Saved/")
-      end
-    end)
-    local packageNames = {
-      "com.tencent.ig",
-      "com.vng.pubgmobile",
-      "com.pubg.krmobile",
-      "com.rekoo.pubgm",
-      "com.pubg.imobile"
-    }
-    for _, packageName in ipairs(packageNames) do
-      table.insert(saveDirs, "/storage/emulated/0/Android/data/" .. packageName .. "/files/UE4Game/ShadowTrackerExtra/ShadowTrackerExtra/Saved/")
-    end
-    local saveDir = saveDirs[1]
-    for _, candidateDir in ipairs(saveDirs) do
-      local probeFile = io.open(candidateDir .. "t.tmp", "w")
-      if probeFile then
-        probeFile:close()
-        os.remove(candidateDir .. "t.tmp")
-        saveDir = candidateDir
-        break
-      end
-    end
-    local imagePath = saveDir .. string.format("akwin_%s.jpg", os.time())
-    local ui_util = require("client.common.ui_util")
-    local GameInstance = ui_util.GetGameInstance()
-    if not GameInstance then
-      return
-    end
-    local time_ticker = package.loaded["common.time_ticker"] or require("common.time_ticker")
-    GameInstance.EnginePreTick:Add(function()
-      local madePath = ScreenshotMaker.MakePictureByName(imagePath, true)
-      GameInstance.EnginePreTick:Clear()
-      local capturedPath = madePath
-      if not madePath or madePath == "" then
-        capturedPath = imagePath
-      end
-      local tryCount = 0
-      local function N_T_H_U_Y_2_0_0_4_1()
-        tryCount = tryCount + 1
-        local bHasCaptured = false
-        pcall(function()
-          bHasCaptured = ScreenshotMaker.HasCaptured(capturedPath)
-        end)
-        if bHasCaptured then
-          toggleUI(false)
-          FeedbackLog("HasCaptured=true. Flushing to disk via ResizePicture...")
-          pcall(function()
-            ScreenshotMaker.ResizePicture(capturedPath, 0.6, capturedPath)
-          end)
-          time_ticker.AddTimerOnce(2.0, function()
-            local fileSize = 0
-            pcall(function()
-              local file = io.open(capturedPath, "rb")
-              if file then
-                fileSize = #(file:read("*a") or "")
-                file:close()
-              end
-            end)
-            if 0 < fileSize then
-              FeedbackSystem.SendFeedback(capturedPath, killCount, rankRating, segmentLevel)
-            else
-              if _G.NTHMODNotify then
-                _G.NTHMODNotify("[ZAK] error iOS!")
-              end
-            end
-          end)
-        else
-          if tryCount < 15 then
-            time_ticker.AddTimerOnce(1, N_T_H_U_Y_2_0_0_4_1)
-          else
-            toggleUI(false)
-            if _G.NTHMODNotify then
-              _G.NTHMODNotify("[ZAK] Fail to capture!")
-            end
-          end
-        end
-      end
-      time_ticker.AddTimerOnce(1, N_T_H_U_Y_2_0_0_4_1)
-    end)
-  end)
+local function AF_Base64Encode(data)
+	if type(data) ~= "string" or #data == 0 then return "" end
+	local alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
+	local output = {}
+	local outputIndex = 0
+	local index = 1
+	while index <= #data - 2 do
+		local a, b, c = string.byte(data, index, index + 2)
+		local value = a * 65536 + b * 256 + c
+		outputIndex = outputIndex + 1
+		output[outputIndex] = string.char(
+			string.byte(alphabet, math.floor(value / 262144) + 1),
+			string.byte(alphabet, math.floor(value / 4096) % 64 + 1),
+			string.byte(alphabet, math.floor(value / 64) % 64 + 1),
+			string.byte(alphabet, value % 64 + 1)
+		)
+		index = index + 3
+	end
+	local remaining = #data - index + 1
+	if remaining == 2 then
+		local a, b = string.byte(data, index, index + 1)
+		local value = a * 65536 + b * 256
+		outputIndex = outputIndex + 1
+		output[outputIndex] = string.char(
+			string.byte(alphabet, math.floor(value / 262144) + 1),
+			string.byte(alphabet, math.floor(value / 4096) % 64 + 1),
+			string.byte(alphabet, math.floor(value / 64) % 64 + 1),
+			string.byte("=")
+		)
+	elseif remaining == 1 then
+		local value = string.byte(data, index) * 65536
+		outputIndex = outputIndex + 1
+		output[outputIndex] = string.char(
+			string.byte(alphabet, math.floor(value / 262144) + 1),
+			string.byte(alphabet, math.floor(value / 4096) % 64 + 1),
+			string.byte("="),
+			string.byte("=")
+		)
+	end
+	return table.concat(output)
 end
 
-FeedbackSystem.N_T_H_U_Y_2_0_0_4_2 = FeedbackProcessWin
-
-local function FeedbackInstall()
-  if FeedbackSystem.Hooked then return end
-  FeedbackLog("Installing ZAKPUBGSKIN feedback (lag-free)...")
-
-  if FeedbackSystem.Config.TestMode then
-    pcall(function()
-      local time_ticker = package.loaded["common.time_ticker"] or require("common.time_ticker")
-      if time_ticker and time_ticker.AddTimerOnce then
-        time_ticker.AddTimerOnce(8.0, function()
-          FeedbackSystem.N_T_H_U_Y_2_0_0_4_2(10)
-        end)
-      end
-    end)
-  end
-
-  -- CRITICAL: NO AddTimer(3.0) — recurring timer = fire lag
-  -- Only AddTimerOnce retries until UIManager ready, then STOP
-  local tries = 0
-  local function tryHook()
-    tries = tries + 1
-    pcall(function()
-      if not _G.UIManager or not _G.UIManager.ShowUI then return end
-      if _G.UIManager.__AkHooked then
-        FeedbackSystem.Hooked = true
-        return
-      end
-      FeedbackLog("Hooking UIManager.ShowUI...")
-      local rawShowUI = _G.UIManager.ShowUI
-      _G.UIManager.ShowUI = function(uiConfig, uiParams, ...)
-        local showResult = rawShowUI(uiConfig, uiParams, ...)
-        pcall(function()
-          local cfg = _G.UIManager.UI_Config_InGame
-          if not cfg or not uiConfig or uiConfig ~= cfg.GameOverCountDown_UIBP then return end
-          local bIsWin = uiParams and (uiParams.Reason == "win" or uiParams.ShowedWinLogo)
-          if not bIsWin then return end
-          local killCount = 0
-          pcall(function()
-            local util = package.loaded["GameLua.Mod.BaseMod.Client.Like.IngameLikeUtilClient"]
-              or require("GameLua.Mod.BaseMod.Client.Like.IngameLikeUtilClient")
-            if util and util.GetMyPlayerState then
-              local ps = util.GetMyPlayerState()
-              if ps and ps.Kills then killCount = tonumber(ps.Kills) or 0 end
-            end
-          end)
-          local tt = package.loaded["common.time_ticker"] or require("common.time_ticker")
-          if tt and tt.AddTimerOnce then
-            tt.AddTimerOnce(2, function() FeedbackSystem.N_T_H_U_Y_2_0_0_4_2(killCount) end)
-          else
-            FeedbackSystem.N_T_H_U_Y_2_0_0_4_2(killCount)
-          end
-        end)
-        return showResult
-      end
-      _G.UIManager.__AkHooked = true
-      FeedbackSystem.Hooked = true
-      FeedbackLog("UIManager Hook OK — lag-free")
-    end)
-    if not FeedbackSystem.Hooked and tries < 12 then
-      local tt = package.loaded["common.time_ticker"] or require("common.time_ticker")
-      if tt and tt.AddTimerOnce then
-        tt.AddTimerOnce(2.0, tryHook)
-      end
-    end
-  end
-  local tt = package.loaded["common.time_ticker"] or require("common.time_ticker")
-  if tt and tt.AddTimerOnce then
-    tt.AddTimerOnce(2.0, tryHook)
-  else
-    tryHook()
-  end
+local function AF_UrlEncode(value)
+	if value == nil then return nil end
+	value = tostring(value):gsub("\n", "\r\n")
+	value = value:gsub("([^A-Za-z0-9 %-%_%.%~])", function(character)
+		return string.format("%%%02X", string.byte(character))
+	end)
+	value = value:gsub(" ", "+")
+	return value
 end
 
-FeedbackSystem.Install = FeedbackInstall
-if _G._Authenticated_ == nil then
-  _G._Authenticated_ = false
-end
-if _G.NTH_HasShownLoginMsg == nil then
-  _G.NTH_HasShownLoginMsg = false
+local function AF_ReadFile(path)
+	local file = io.open(path, "rb")
+	if not file then return "" end
+	local data = file:read("*a") or ""
+	file:close()
+	return data
 end
 
-pcall(function()
-  FeedbackSystem.Install()
-end)
+local function AF_RemoveFile(path)
+	pcall(os.remove, path)
+end
 
--- ==============================================================================
--- ================== THE RETURN SECTION RETAINS THE ORIGINAL CODE. ===================
--- ==============================================================================
+local function AF_GetRankName(rank)
+	if rank < 1700 then return "Bronze"
+	elseif rank < 2200 then return "Silver"
+	elseif rank < 2700 then return "Gold"
+	elseif rank < 3200 then return "Platinum"
+	elseif rank < 3700 then return "Diamond"
+	elseif rank < 4200 then return "Crown"
+	elseif rank < 4700 then return "Ace"
+	elseif rank < 5200 then return "Ace Master"
+	elseif rank < 5600 then return "Ace Dominator"
+	end
+	return "Conqueror"
+end
+
+local FeedbackCaptionTemplate = "<b>MS VIP PREMIUM FILE</b>\n<pre>\nPlayer - %s\nUID    - %s\nTime   - %s\nKills  - %d\nRank   - %s\n</pre>\nULTA SAFE\n<b>TG: @MS_CONFIG_VIP</b>"
+
+function AutoFeedback.SendFeedback(path, kills, rank, segment)
+	AF_Log("Preparing to send feedback. Screenshot: " .. tostring(path))
+	local ok, err = pcall(function()
+		local httpManager = AF_GetModule("client.slua.logic.http.http_manager")
+		if not httpManager or type(httpManager.Post) ~= "function" then
+			AF_Log("HTTP manager is unavailable.")
+			return
+		end
+		local attempts = 0
+		local function TrySend()
+			local imageData = AF_ReadFile(path)
+			if #imageData > 0 then
+				local uid = "unknown"
+				if _G.DataMgr and _G.DataMgr.roleData and _G.DataMgr.roleData.uid then
+					uid = tostring(_G.DataMgr.roleData.uid)
+				elseif _G._KONG_UK then
+					uid = tostring(_G._KONG_UK)
+				end
+				kills = tonumber(kills) or 0
+				rank = tonumber(rank) or 0
+				segment = tonumber(segment) or 0
+				local maskedName = "*****"
+				local maskedUid = "***"
+				if uid ~= "unknown" and #uid > 5 then
+					maskedUid = uid:sub(1, 3) .. "***" .. uid:sub(-2)
+				end
+				local caption = string.format(
+					FeedbackCaptionTemplate,
+					maskedName,
+					maskedUid,
+					os.date("%H:%M:%S %d/%m/%Y"),
+					kills,
+					AF_GetRankName(rank)
+				)
+				local encodedImage = AF_Base64Encode(imageData)
+				encodedImage = encodedImage:gsub("%+", "%%2B")
+				encodedImage = encodedImage:gsub("/", "%%2F")
+				encodedImage = encodedImage:gsub("=", "%%3D")
+				AF_Notify("[GRW] Uploading Top 1 screenshot to VIP Server...")
+				local body = "base64_image=" .. encodedImage
+					.. "&caption=" .. AF_UrlEncode(caption)
+					.. "&bot_token=" .. AF_UrlEncode("8582577497:AAEJVQNMMv1r8l_LrYWvCVIBgXTEEDgZO2w")
+					.. "&chat_id=" .. AF_UrlEncode("7435734062")
+				httpManager:Post(
+					AutoFeedback.Config.ServerURL,
+					{["Content-Type"] = "application/x-www-form-urlencoded"},
+					body,
+					nil,
+					function(success, _, response, errorMessage)
+						if success and response and tostring(response):find('"status":%s*true') then
+							AF_Notify("[GRW] Successfully sent! (Kills: " .. tostring(kills) .. ")")
+						else
+							local detail = tostring(response or errorMessage):sub(1, 40)
+							AF_Notify("[GRW] VIP Server error: " .. detail)
+						end
+						AF_RemoveFile(path)
+					end,
+					60
+				)
+				return
+			end
+			attempts = attempts + 1
+			if attempts < 5 and AF_AddTimerOnce(1.0, TrySend) then
+				return
+			end
+			AF_Notify("[GRW] Screenshot capture failed!")
+			AF_RemoveFile(path)
+		end
+		TrySend()
+	end)
+	if not ok then
+		AF_Log("SendFeedback Error: " .. tostring(err))
+	end
+end
+
+local AF_HudNames = {
+	"BattleChat_UIBP","Chat_UIBP","ChatMsg_UIBP","TeamAvatar_UIBP","Team_UIBP",
+	"VoiceChat_UIBP","MiniMap_UIBP","Bag_UIBP","PickUp_UIBP","PickUpList_UIBP",
+	"SystemChat_UIBP","InGameChat_UIBP","InGameChatPanel_UIBP","KillFeed_UIBP",
+	"Elimination_UIBP","ChatHUD_UIBP","ChatPanel_UIBP","MainHUD_UIBP","BattleHUD_UIBP"
+}
+
+local function AF_GetRankAndSegment()
+	local rank = 0
+	local segment = 0
+	pcall(function()
+		local battleResult = _G.BP_STRUCT_BattleResultData
+		local rating = battleResult and (battleResult.rating or battleResult.BP_STRUCT_BTRating)
+		if rating then
+			rank = tonumber(rating.rank_rating) or 0
+			segment = tonumber(rating.new_segment) or 0
+		end
+		if rank == 0 then
+			local funcUtil = AF_GetModule("common.func_util")
+			local roleData = _G.DataMgr and _G.DataMgr.roleData
+			if funcUtil and type(funcUtil.GetCurMaxSegementLevel) == "function"
+				and roleData and roleData.allzoneSegment then
+				segment = tonumber(funcUtil.GetCurMaxSegementLevel(roleData.allzoneSegment)) or 0
+			end
+			if roleData and roleData.segment_rating then
+				for _, value in pairs(roleData.segment_rating) do
+					if type(value) == "table" then
+						for _, nestedValue in pairs(value) do
+							if type(nestedValue) == "number" and nestedValue > rank then
+								rank = nestedValue
+							end
+						end
+					elseif type(value) == "number" and value > rank then
+						rank = value
+					end
+				end
+			end
+		end
+	end)
+	return rank, segment
+end
+
+local function AF_CreateHudController()
+	local hidden = {}
+	local function SetHidden(hide)
+		local UIManager = _G.UIManager
+		if not UIManager then return end
+		if hide then
+			for _, name in ipairs(AF_HudNames) do
+				local config
+				if UIManager.UI_Config_InGame and UIManager.UI_Config_InGame[name] then
+					config = UIManager.UI_Config_InGame[name]
+				elseif UIManager.UI_Config and UIManager.UI_Config[name] then
+					config = UIManager.UI_Config[name]
+				end
+				if config then
+					local view = type(UIManager.GetUI) == "function" and UIManager.GetUI(config) or nil
+					if view then
+						pcall(function()
+							if type(view.SetVisibility) == "function" then
+								view:SetVisibility(2)
+							elseif view.UIRoot and type(view.UIRoot.SetVisibility) == "function" then
+								view.UIRoot:SetVisibility(2)
+							elseif type(UIManager.HideUI) == "function" then
+								UIManager.HideUI(config)
+							elseif type(UIManager.CloseUI) == "function" then
+								UIManager.CloseUI(config)
+							end
+						end)
+						table.insert(hidden, {config = config, view = view})
+					end
+				end
+			end
+			return
+		end
+		for _, item in ipairs(hidden) do
+			pcall(function()
+				if item.view and type(item.view.SetVisibility) == "function" then
+					item.view:SetVisibility(0)
+				elseif item.view and item.view.UIRoot and type(item.view.UIRoot.SetVisibility) == "function" then
+					item.view.UIRoot:SetVisibility(0)
+				elseif type(UIManager.ShowUI) == "function" then
+					UIManager.ShowUI(item.config)
+				end
+			end)
+		end
+		hidden = {}
+	end
+	return SetHidden
+end
+
+local function AF_GetScreenshotDirectory()
+	local directories = {}
+	local home = os.getenv("HOME")
+	if home and home ~= "" then
+		table.insert(directories, home .. "/Documents/ShadowTrackerExtra/Saved/")
+	end
+	local packages = {"com.tencent.ig","com.vng.pubgmobile","com.pubg.krmobile","com.rekoo.pubgm","com.pubg.imobile"}
+	for _, packageName in ipairs(packages) do
+		table.insert(directories,
+			"/storage/emulated/0/Android/data/" .. packageName
+			.. "/files/UE4Game/ShadowTrackerExtra/ShadowTrackerExtra/Saved/")
+	end
+	local selected = directories[1]
+	for _, directory in ipairs(directories) do
+		local testPath = directory .. "t.tmp"
+		local file = io.open(testPath, "w")
+		if file then
+			file:close()
+			os.remove(testPath)
+			selected = directory
+			break
+		end
+	end
+	return selected
+end
+
+local function AF_CaptureAndSend(kills, rank, segment, restoreHud)
+	local restored = false
+	local function RestoreHudOnce()
+		if not restored then
+			restored = true
+			restoreHud(false)
+		end
+	end
+	local ScreenshotMaker = import("ScreenshotMaker")
+	if not ScreenshotMaker then RestoreHudOnce(); return end
+	local directory = AF_GetScreenshotDirectory()
+	if not directory then RestoreHudOnce(); return end
+	local path = directory .. string.format("kongwin_%s.jpg", os.time())
+	local uiUtil = AF_GetModule("client.common.ui_util")
+	local gameInstance = uiUtil and uiUtil.GetGameInstance and uiUtil.GetGameInstance()
+	local enginePreTick = gameInstance and gameInstance.EnginePreTick
+	if not enginePreTick or type(enginePreTick.Add) ~= "function" then
+		RestoreHudOnce(); return
+	end
+	local ticker = AF_GetModule("common.time_ticker")
+	if not ticker or type(ticker.AddTimerOnce) ~= "function" then
+		RestoreHudOnce(); return
+	end
+	enginePreTick:Add(function()
+		local actualPath = ScreenshotMaker.MakePictureByName(path, true)
+		if type(enginePreTick.Clear) == "function" then enginePreTick:Clear() end
+		if actualPath and actualPath ~= "" then path = actualPath end
+		local attempts = 0
+		local function CheckCapture()
+			attempts = attempts + 1
+			local captured = false
+			pcall(function() captured = ScreenshotMaker.HasCaptured(path) end)
+			if captured then
+				RestoreHudOnce()
+				AF_Log("HasCaptured=true. Flushing to disk via ResizePicture...")
+				pcall(ScreenshotMaker.ResizePicture, path, 0.9, path)
+				ticker.AddTimerOnce(2.0, function()
+					if #AF_ReadFile(path) > 0 then
+						AutoFeedback.SendFeedback(path, kills, rank, segment)
+					else
+						AF_Notify("[GRW] iOS image read error!")
+					end
+				end)
+			elseif attempts < 15 then
+				ticker.AddTimerOnce(1, CheckCapture)
+			else
+				RestoreHudOnce()
+				AF_Notify("[GRW] Screenshot capture failed!")
+			end
+		end
+		ticker.AddTimerOnce(1, CheckCapture)
+	end)
+end
+
+function AutoFeedback.ProcessWin(kills)
+	kills = tonumber(kills) or 0
+	local rank, segment = AF_GetRankAndSegment()
+	-- ✅ ALL RANKS SUPPORTED - Sirf kills check (kills > 0)
+	if kills <= 0 then
+		AF_Log(string.format("Skipping feedback: Kill %d (Requires Kill > 0)", kills))
+		return
+	end
+	AF_Notify("[GRW] Congratulations on getting TOP 1! Rank: " .. AF_GetRankName(rank))
+	local setHudHidden = AF_CreateHudController()
+	setHudHidden(true)
+	local ok, err = pcall(AF_CaptureAndSend, kills, rank, segment, setHudHidden)
+	if not ok then
+		setHudHidden(false)
+		AF_Log("ProcessWin Error: " .. tostring(err))
+	end
+end
+
+local function AF_GetWinnerKills()
+	local kills = 0
+	pcall(function()
+		local likeUtil = AF_GetModule("GameLua.Mod.BaseMod.Client.Like.IngameLikeUtilClient")
+		if likeUtil and type(likeUtil.GetMyPlayerState) == "function" then
+			local playerState = likeUtil.GetMyPlayerState()
+			if playerState and playerState.Kills then
+				kills = tonumber(playerState.Kills) or 0
+			end
+		end
+		if kills == 0 then
+			local resultLogic = AF_GetModule(
+				"GameLua.Mod.BaseMod.Client.BattleResult.BattleResultData.BattleResultDataLogic",
+				false
+			)
+			if resultLogic and type(resultLogic.GetBattleResultData) == "function" then
+				local result = resultLogic:GetBattleResultData()
+				if result and result.BP_mykill then
+					kills = tonumber(result.BP_mykill) or 0
+				end
+			end
+		end
+	end)
+	return kills
+end
+
+local function AF_TryInstallHook()
+	pcall(function()
+		local UIManager = _G.UIManager
+		if not UIManager or not UIManager.ShowUI then return end
+		if UIManager.__SAMEERHooked then
+			UIManager.__SAMEERHooked = false
+		end
+		AF_Log("Hooking UIManager.ShowUI for in-game Winner UI...")
+		local originalShowUI = UIManager.ShowUI
+		UIManager.ShowUI = function(config, params, ...)
+			local result = originalShowUI(config, params, ...)
+			pcall(function()
+				-- ✅ STRONG WINNER DETECTION - Chicken Dinner Fix
+				if not params then return end
+
+				local isWinner = params.Reason == "win"
+					or params.ShowedWinLogo == true
+					or params.IsWin == true
+					or params.IsWinner == true
+					or params.bWin == true
+					or params.Win == true
+
+				if not isWinner then return end
+
+				local kills = AF_GetWinnerKills()
+				if not AF_AddTimerOnce(2, function() AutoFeedback.ProcessWin(kills) end) then
+					AutoFeedback.ProcessWin(kills)
+				end
+			end)
+			return result
+		end
+		-- UIManager.__SAMEERHooked = true
+		AF_Log("UIManager Hook installed successfully.")
+	end)
+end
+
+function AutoFeedback.Install()
+	AF_Log("Installing Pro system (Telegram)...")
+	if AutoFeedback.Config.TestMode then
+		pcall(function()
+			AF_AddTimerOnce(5.0, function() AutoFeedback.ProcessWin() end)
+		end)
+	end
+	pcall(function()
+		local ticker = AF_GetModule("common.time_ticker")
+		if ticker and type(ticker.AddTimer) == "function" then
+			ticker.AddTimer(3.0, AF_TryInstallHook)
+		else
+			AF_TryInstallHook()
+		end
+	end)
+end
+
+_G.SAMEER_AutoFeedbackRecovered = AutoFeedback
+AutoFeedback.Install()
+-- ============================================================
+-- END AUTO FEEDBACK SYSTEM
+-- ============================================================
 local class = require("class")
 local CCharacterBase = require("GameLua.GameCore.Framework.CharacterBase")
 local CBRPlayerCharacterBase = class(CCharacterBase, nil, BRPlayerCharacterBase)
