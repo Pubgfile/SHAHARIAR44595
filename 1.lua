@@ -113,7 +113,7 @@ local MasterLicenseConfig = (function()
               url = 'https://zakpubg.skin/connect', game = 'BGMI',
         timeout = 10, clockSkew = 120, expiryPath = nil,
         manualExpiry = "2026-12-31 23:59:59", tamperTolerance = 5,
-        secret = 'MSPUBG',
+        secret = 'ZAKPUBGSKIN',
     }
 end)()
 
@@ -641,8 +641,6 @@ local MasterLoginUI = (function()
         function UI.Destroy()
             local previous = UI._data; UI._data = nil; detach(previous)
         end
-        -- Call UI.Tick(deltaSeconds) from the host's existing per-frame callback.
-        -- Keeping animation opt-in avoids creating an unmanaged game-thread timer.
         function UI.Tick(deltaSeconds)
             local data = UI._data
             if not data or not data.visible or not valid(data.container) then return false end
@@ -652,17 +650,17 @@ local MasterLoginUI = (function()
             local pulse = (math.sin(data.animationClock * 2.0) + 1) * 0.5
             local ok = pcall(function()
                 if valid(data.halo) then
-                    data.halo:SetBrushColor(color(1.0, 0.82, 0.02, 0.09 + pulse * 0.13))
+                    data.halo:SetBrushColor(color(0.8, 0.0, 0.0, 0.18 + pulse * 0.13))
                 end
                 if valid(data.buttonGlow) then
-                    data.buttonGlow:SetBrushColor(color(1.0, 0.82, 0.02, 0.24 + pulse * 0.26))
+                    data.buttonGlow:SetBrushColor(color(0.0, 0.8, 0.0, 0.24 + pulse * 0.26))
                 end
                 if data.scanSlot then
                     local travel = (data.animationClock % 2.8) / 2.8
                     local scanX = 12 + travel * math.max(1, data.width - 76)
                     data.scanSlot:SetPosition(vector(scanX * (data.scale or 1), 58 * (data.scale or 1)))
                     if valid(data.scan) then
-                        data.scan:SetBrushColor(color(1.0, 0.86, 0.12, 0.08 + pulse * 0.14))
+                        data.scan:SetBrushColor(color(0.8, 0.0, 0.0, 0.08 + pulse * 0.14))
                     end
                 end
             end)
@@ -774,7 +772,7 @@ local MasterLoginUI = (function()
                 -- 1. Outer Golden Glow Halo
                 local halo = make("Border", data.container)
                 data.halo = halo
-                halo:SetBrushColor(color(1.0, 0.85, 0.0, 0.18))
+                halo:SetBrushColor(color(0.8, 0.0, 0.0, 0.18))
                 visibility(halo, passive)
                 add(halo, -3, -3, W + 6, H + 6, 0)
 
@@ -786,52 +784,52 @@ local MasterLoginUI = (function()
 
                 -- 2a. Slow gold scan shimmer behind the header.
                 data.scan = make("Border", data.container)
-                data.scan:SetBrushColor(color(1.0, 0.86, 0.12, 0.12))
+                data.scan:SetBrushColor(color(0.8, 0.0, 0.0, 0.12))
                 visibility(data.scan, passive)
                 data.scanSlot = add(data.scan, 12, 58, 64, 2, 2)
 
                 -- 3. Solid Gold Neon Outer Borders
                 local topBorder = make("Border", data.container)
-                topBorder:SetBrushColor(color(1.0, 0.85, 0.0, 1.0))
+                topBorder:SetBrushColor(color(0.8, 0.0, 0.0, 1.0))
                 visibility(topBorder, passive)
                 add(topBorder, 0, 0, W, 2, 3)
 
                 local botBorder = make("Border", data.container)
-                botBorder:SetBrushColor(color(1.0, 0.85, 0.0, 1.0))
+                botBorder:SetBrushColor(color(0.8, 0.0, 0.0, 1.0))
                 visibility(botBorder, passive)
                 add(botBorder, 0, H - 2, W, 2, 3)
 
                 local leftBorder = make("Border", data.container)
-                leftBorder:SetBrushColor(color(1.0, 0.85, 0.0, 1.0))
+                leftBorder:SetBrushColor(color(0.0, 0.8, 0.0, 1.0))
                 visibility(leftBorder, passive)
                 add(leftBorder, 0, 0, 2, H, 3)
 
                 local rightBorder = make("Border", data.container)
-                rightBorder:SetBrushColor(color(1.0, 0.85, 0.0, 1.0))
+                rightBorder:SetBrushColor(color(0.0, 0.8, 0.0, 1.0))
                 visibility(rightBorder, passive)
                 add(rightBorder, W - 2, 0, 2, H, 3)
 
                 -- 4. Diagonal Corner Hazard Decos (Top-Left & Bottom-Right)
                 local tlDeco = make("Border", data.container)
-                tlDeco:SetBrushColor(color(1.0, 0.85, 0.0, 0.9))
+                tlDeco:SetBrushColor(color(0.8, 0.0, 0.0, 0.9))
                 visibility(tlDeco, passive)
                 add(tlDeco, 2, 2, 28, 6, 4)
 
                 local brDeco = make("Border", data.container)
-                brDeco:SetBrushColor(color(1.0, 0.85, 0.0, 0.9))
+                brDeco:SetBrushColor(color(0.0, 0.8, 0.0, 0.9))
                 visibility(brDeco, passive)
                 add(brDeco, W - 30, H - 8, 28, 6, 4)
 
                 -- 5. Crown mark and top header titles
                 local crown = make("TextBlock", data.container)
                 crown:SetText("♛")
-                setTextStyle(crown, 27, color(1.0, 0.82, 0.0, 1.0))
+                setTextStyle(crown, 27, color(0.8, 0.0, 0.0, 1.0))
                 visibility(crown, passive)
                 add(crown, 24, 10, 34, 34, 5)
 
                 local titleTag = make("TextBlock", data.container)
                 titleTag:SetText("VIP SYSTEM PORTAL")
-                setTextStyle(titleTag, 19, color(1.0, 0.86, 0.0, 1.0))
+                setTextStyle(titleTag, 19, color(0.0, 0.8, 0.0, 1.0))
                 visibility(titleTag, passive)
                 add(titleTag, 62, 14, 280, 26, 5)
 
@@ -843,29 +841,29 @@ local MasterLoginUI = (function()
 
                 -- Premium shield badge
                 local badge = make("Border", data.container)
-                badge:SetBrushColor(color(0.13, 0.11, 0.02, 0.96))
+                badge:SetBrushColor(color(0.15, 0.0, 0.0, 0.96))
                 visibility(badge, passive)
                 add(badge, W - 218, 13, 25, 29, 5)
 
                 local badgeMark = make("TextBlock", data.container)
                 badgeMark:SetText("★")
-                setTextStyle(badgeMark, 15, color(1.0, 0.86, 0.0, 1.0))
+                setTextStyle(badgeMark, 15, color(0.0, 0.8, 0.0, 1.0))
                 visibility(badgeMark, passive)
                 add(badgeMark, W - 215, 18, 20, 18, 6)
 
                 local topBadge = make("TextBlock", data.container)
                 topBadge:SetText("UNLOCK YOUR\nPREMIUM FEATURES")
-                setTextStyle(topBadge, 9, color(1.0, 0.85, 0.0, 1.0))
+                setTextStyle(topBadge, 9, color(0.8, 0.0, 0.0, 1.0))
                 visibility(topBadge, passive)
                 add(topBadge, W - 188, 13, 140, 31, 5)
 
                 -- Close control, matching the reference card.
                 data.closeButton = make("Button", data.container)
-                pcall(function() data.closeButton:SetBackgroundColor(color(0.16, 0.13, 0.02, 1.0)) end)
+                pcall(function() data.closeButton:SetBackgroundColor(color(0.16, 0.0, 0.0, 1.0)) end)
                 visibility(data.closeButton, visibleEnum)
                 local closeLabel = make("TextBlock", data.closeButton)
                 closeLabel:SetText("X")
-                setTextStyle(closeLabel, 15, color(1.0, 0.9, 0.0, 1.0))
+                setTextStyle(closeLabel, 15, color(1.0, 1.0, 1.0, 1.0))
                 visibility(closeLabel, passive)
                 data.closeButton:AddChild(closeLabel)
                 add(data.closeButton, W - 34, 8, 25, 25, 8)
@@ -883,12 +881,12 @@ local MasterLoginUI = (function()
 
                 -- 7. Golden Chamfered Input Box Container
                 local inputHalo = make("Border", data.container)
-                inputHalo:SetBrushColor(color(1.0, 0.85, 0.0, 0.25))
+                inputHalo:SetBrushColor(color(0.0, 0.8, 0.0, 0.25))
                 visibility(inputHalo, passive)
                 add(inputHalo, 24, 88, W - 48, 44, 4)
 
                 local inputBorder = make("Border", data.container)
-                inputBorder:SetBrushColor(color(1.0, 0.85, 0.0, 1.0))
+                inputBorder:SetBrushColor(color(0.0, 0.8, 0.0, 1.0))
                 visibility(inputBorder, passive)
                 add(inputBorder, 25, 89, W - 50, 42, 5)
 
@@ -907,18 +905,18 @@ local MasterLoginUI = (function()
 
                 -- 8. Buy Key Bar
                 local buyBar = make("Border", data.container)
-                buyBar:SetBrushColor(color(0.10, 0.09, 0.02, 0.90))
+                buyBar:SetBrushColor(color(0.15, 0.0, 0.0, 0.90))
                 visibility(buyBar, passive)
                 add(buyBar, 26, 140, W - 52, 24, 5)
 
                 local buyBarTrim = make("Border", data.container)
-                buyBarTrim:SetBrushColor(color(1.0, 0.85, 0.0, 1.0))
+                buyBarTrim:SetBrushColor(color(0.8, 0.0, 0.0, 1.0))
                 visibility(buyBarTrim, passive)
                 add(buyBarTrim, 26, 140, 3, 24, 6)
 
                 local buyText = make("TextBlock", data.container)
                 buyText:SetText("BUY KEY: Telegram @SHAHARIAR44595")
-                setTextStyle(buyText, 11, color(1.0, 0.90, 0.40, 1.0))
+                setTextStyle(buyText, 11, color(1.0, 0.4, 0.4, 1.0))
                 visibility(buyText, passive)
                 add(buyText, 36, 144, W - 72, 18, 7)
 
@@ -937,17 +935,17 @@ local MasterLoginUI = (function()
                 local btnY = 202
 
                 data.buttonGlow = make("Border", data.container)
-                data.buttonGlow:SetBrushColor(color(1.0, 0.85, 0.0, 0.45))
+                data.buttonGlow:SetBrushColor(color(0.0, 0.8, 0.0, 0.45))
                 visibility(data.buttonGlow, passive)
                 add(data.buttonGlow, btnX - 3, btnY - 2, btnW + 6, btnH + 4, 5)
 
                 data.button = make("Button", data.container)
-                pcall(function() data.button:SetBackgroundColor(color(1.0, 0.82, 0.0, 1.0)) end)
+                pcall(function() data.button:SetBackgroundColor(color(0.7, 0.0, 0.0, 1.0)) end)
                 visibility(data.button, visibleEnum)
 
                 local label = make("TextBlock", data.button)
                 label:SetText("★  AUTHENTICATE NOW  ->")
-                setTextStyle(label, 15, color(0.02, 0.02, 0.02, 1.0))
+                setTextStyle(label, 15, color(1.0, 1.0, 1.0, 1.0))
                 visibility(label, passive)
                 data.button:AddChild(label)
                 add(data.button, btnX, btnY, btnW, btnH, 6)
@@ -955,7 +953,7 @@ local MasterLoginUI = (function()
                 -- 11. Bottom Trust Footer (100% SAFE | INSTANT ACCESS | 24/7 SUPPORT | PREMIUM SERVICE)
                 local footer = make("TextBlock", data.container)
                 footer:SetText("100% SAFE   |   INSTANT ACCESS   |   24/7 SUPPORT   |   PREMIUM SERVICE")
-                setTextStyle(footer, 10, color(1.0, 0.85, 0.2, 0.85))
+                setTextStyle(footer, 10, color(0.0, 0.8, 0.0, 0.85))
                 visibility(footer, passive)
                 add(footer, 26, 270, W - 52, 18, 5)
                 -- === OBSIDIAN + GOLD VIP PORTAL END ===
