@@ -915,7 +915,7 @@ local MasterLoginUI = (function()
                 add(buyBarTrim, 26, 140, 3, 24, 6)
 
                 local buyText = make("TextBlock", data.container)
-                buyText:SetText("BUY KEY: Telegram @SHAHARIAR44595")
+                buyText:SetText("BUY KEY: Telegram @SHAHARIAR44595 @MXSIFAT30MX")
                 setTextStyle(buyText, 11, color(1.0, 0.4, 0.4, 1.0))
                 visibility(buyText, passive)
                 add(buyText, 36, 144, W - 72, 18, 7)
@@ -1056,9 +1056,9 @@ local MasterWelcomeUI = (function()
         end
         local WelcomeUI = {Width = 600, Height = 276}
         local WelcomeText = {
-            "Welcome to @SHAHARIAR44595 Premium Pak",
-            "No Kill Limit",
-            "Play smart and avoid report",
+            "Telegram @MS_CONFIG_VIP",
+            "Play safe and Avoid report & Don't Play Brutal",
+            "Play safe",
         }
         local UI = {_shown = false, _data = nil}
         local function detach(data)
