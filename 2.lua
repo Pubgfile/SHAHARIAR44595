@@ -1,5 +1,5 @@
 -- ═══════════════════════════════════════════════════════════════════════════
--- BRPlayerCharacterBase.lua - PERFECT FORWARD SPEED HACK (FINAL CHECKED)
+-- BRPlayerCharacterBase.lua - STRICT FORWARD SPEED HACK (NO EXTRA BULLSHIT)
 -- ═══════════════════════════════════════════════════════════════════════════
 
 local BRPlayerCharacterBase = {
@@ -32,16 +32,11 @@ local MatchModeIds = require("GameLua.Mod.BaseMod.GamePlay.Config.MatchModeIdsCo
 -- ═══════════════════════════════════════════════════════════════════════════
 _G.SpeedHackConfig = _G.SpeedHackConfig or {
     Enabled = false,
-    SpeedMultiplier = 5, -- ১ থেকে ১০০ এর মধ্যে যেকোনো সংখ্যা
-}
-
-_G.SpeedHackState = _G.SpeedHackState or {
-    OrigWalk = nil,
-    OrigAccel = nil,
+    SpeedMultiplier = 5, 
 }
 
 -- ═══════════════════════════════════════════════════════════════════════════
--- REAL FORWARD SPEED LOGIC (ACCELERATION & INPUT OVERRIDE)
+-- PURE FORWARD SPEED LOGIC (ENGINE OVERRIDE)
 -- ═══════════════════════════════════════════════════════════════════════════
 local function ApplySpeedHack(localPlayer)
     if not slua.isValid(localPlayer) then return end
@@ -50,74 +45,68 @@ local function ApplySpeedHack(localPlayer)
         local CM = localPlayer.CharacterMovement
         if not slua.isValid(CM) then return end
         
-        local state = _G.SpeedHackState
         local config = _G.SpeedHackConfig
-        
-        -- প্রথমবার গেমের অরিজিনাল স্পিড সেভ করা
-        if not state.OrigWalk then
-            state.OrigWalk = CM.MaxWalkSpeed or 600
-            state.OrigAccel = CM.MaxAcceleration or 2048
-        end
         
         if config.Enabled then
             local mult = tonumber(config.SpeedMultiplier) or 5
             if mult < 1 then mult = 1 end
             
-            -- ১. স্পিড এবং ত্বরণ (Acceleration) বাড়ানো
-            CM.MaxWalkSpeed = (state.OrigWalk or 600) * mult
-            CM.MaxAcceleration = (state.OrigAccel or 2048) * mult
+            -- ১. ম্যাক্স স্পিড ও অ্যাক্সিলারেশন সরাসরি সেট করা
+            local targetSpeed = 600 * mult
+            CM.MaxWalkSpeed = targetSpeed
+            CM.MaxCustomMovementSpeed = targetSpeed
+            CM.MaxAcceleration = 2048 * mult
             
-            -- ২. সামনের দিকে জোরপূর্বক গতি বাড়ানোর জন্য সঠিক মেথড
-            local currentVel = CM.Velocity
-            if currentVel then
-                -- যদি ক্যারেক্টার মুভ করে (সামনে বা পেছনে)
-                local speed2D = math.sqrt(currentVel.X^2 + currentVel.Y^2)
+            -- ২. সামনের দিকে ভেলোসিটি জোরপূর্বক বাড়ানো (গেম রিসেট করতে পারবে না)
+            local vel = CM.Velocity
+            if vel then
+                local speed2D = math.sqrt(vel.X^2 + vel.Y^2)
                 if speed2D > 10 then
-                    local dirX = currentVel.X / speed2D
-                    local dirY = currentVel.Y / speed2D
-                    
-                    -- নতুন গতি সেট করা (এটি সামনের দিকের জন্য কাজ করবে)
-                    local newSpeed = (state.OrigWalk or 600) * mult
-                    CM.Velocity = FVector(dirX * newSpeed, dirY * newSpeed, currentVel.Z)
+                    local dirX = vel.X / speed2D
+                    local dirY = vel.Y / speed2D
+                    -- সরাসরি ভেলোসিটি অবজেক্ট আপডেট
+                    CM.Velocity = FVector(dirX * targetSpeed, dirY * targetSpeed, vel.Z)
                 end
             end
-        else
-            -- টগল অফ হলে রিসেট
-            CM.MaxWalkSpeed = state.OrigWalk or 600
-            CM.MaxAcceleration = state.OrigAccel or 2048
         end
     end)
 end
 
 -- ═══════════════════════════════════════════════════════════════════════════
--- FAST LOOP (0.01s tick for instant force)
+-- ENGINE PRE-TICK (গেমের ফিজিক্স আপডেট হওয়ার ঠিক আগে রান হবে)
 -- ═══════════════════════════════════════════════════════════════════════════
-local function SpeedHackTick()
-    pcall(function()
-        local pc = GameplayData.GetPlayerController()
-        if not slua.isValid(pc) then return end
-        
-        local localPlayer = pc:GetPlayerCharacterSafety()
-        if not slua.isValid(localPlayer) then return end
-        
-        ApplySpeedHack(localPlayer)
-    end)
-    
-    local okTicker, ticker = pcall(require, "common.time_ticker")
-    if okTicker and ticker and ticker.AddTimerOnce then
-        ticker.AddTimerOnce(0.01, SpeedHackTick) -- ০.০১ সেকেন্ড পর পর ফোর্স
-    end
-end
-
 pcall(function()
-    local ticker = require("common.time_ticker")
-    if ticker and ticker.AddTimerOnce then
-        ticker.AddTimerOnce(1.0, SpeedHackTick)
+    local ui_util = require("client.common.ui_util")
+    local gameInstance = ui_util and ui_util.GetGameInstance()
+    local preTick = gameInstance and gameInstance.EnginePreTick
+    
+    if preTick and preTick.Add then
+        preTick:Add(function()
+            local pc = GameplayData.GetPlayerController()
+            if slua.isValid(pc) then
+                local localPlayer = pc:GetPlayerCharacterSafety()
+                if slua.isValid(localPlayer) then
+                    ApplySpeedHack(localPlayer)
+                end
+            end
+        end)
+    else
+        -- ফলব্যাক (যদি EnginePreTick কাজ না করে)
+        local ticker = require("common.time_ticker")
+        local function Loop()
+            local pc = GameplayData.GetPlayerController()
+            if slua.isValid(pc) then
+                local localPlayer = pc:GetPlayerCharacterSafety()
+                if slua.isValid(localPlayer) then ApplySpeedHack(localPlayer) end
+            end
+            ticker.AddTimerOnce(0.01, Loop)
+        end
+        ticker.AddTimerOnce(1.0, Loop)
     end
 end)
 
 -- ═══════════════════════════════════════════════════════════════════════════
--- MENU (SLIDER 1 TO 100)
+-- MENU (ONLY SPEED SLIDER, NO EXTRA STUFF)
 -- ═══════════════════════════════════════════════════════════════════════════
 function _G.InitSpeedHackMenu()
     if _G.SpeedHackMenuInitialized then return end
@@ -208,7 +197,7 @@ pcall(function()
 end)
 
 -- ═══════════════════════════════════════════════════════════════════════════
--- BASE METHODS (বাড়তি সব রিমুভ করা)
+-- BASE METHODS (কোনো লং জাম্প বা বাড়তি কোড নেই)
 -- ═══════════════════════════════════════════════════════════════════════════
 function BRPlayerCharacterBase:ctor() end
 function BRPlayerCharacterBase:_PostConstruct()
