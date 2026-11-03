@@ -1,5 +1,5 @@
 -- ═══════════════════════════════════════════════════════════════════════════
--- BRPlayerCharacterBase.lua - FIXED 5X SPEED HACK (INSTANT APPLY)
+-- BRPlayerCharacterBase.lua - PERFECT SPEED HACK (1% to 100% Control)
 -- ═══════════════════════════════════════════════════════════════════════════
 
 local BRPlayerCharacterBase = {
@@ -39,39 +39,30 @@ local EStateType = import("EStateType")
 local ESTEPoseState = import("ESTEPoseState")
 local EGameModeType = import("EGameModeType")
 local STExtraGameStateBase = import("STExtraGameStateBase")
-local UKismetSystemLibrary = import("KismetSystemLibrary")
 local USTExtraBlueprintFunctionLibrary = import("STExtraBlueprintFunctionLibrary")
 local GameplayData = require("GameLua.GameCore.Data.GameplayData")
 local GamePlayTools = require("GameLua.Mod.BaseMod.Common.GamePlayTools")
 local MatchModeIds = require("GameLua.Mod.BaseMod.GamePlay.Config.MatchModeIdsConfig")
 
 -- ═══════════════════════════════════════════════════════════════════════════
--- SPEED HACK CONFIG (FIXED FOR SLIDER)
+-- SPEED HACK CONFIG (FIXED 1-100 SLIDER)
 -- ═══════════════════════════════════════════════════════════════════════════
 _G.SpeedHackConfig = _G.SpeedHackConfig or {
     Enabled = false,
-    Multiplier = 5,              -- 1x to 5x
-    BypassEnabled = true,
-    CombatSlowdown = true,
-    JumpProtection = true,
-    AutoIdleReset = false,       -- অটো রিসেট বন্ধ করে দিলাম যাতে স্পিড না কমে
-    RampUpSpeed = 3000,          -- র‍্যাম্প স্পিড বাড়িয়ে দিলাম যাতে সাথে সাথে ফুল স্পিড হয়
-    ServerMaxSpeed = 1200,       -- সার্ভার ম্যাক্স বাড়িয়ে দিলাম
+    SpeedMultiplier = 100,  -- Default 100% (Max 5x speed)
+    BaseSpeed = 600,
 }
 
 _G.SpeedHackState = _G.SpeedHackState or {
-    Applied = false,
-    LastMultiplier = 0,
     OrigWalk = nil,
     OrigRun = nil,
     OrigCrouch = nil,
     OrigSwim = nil,
-    CurrentSpeed = 0,
-    LastIdleReset = 0,
+    LastSpeed = 0,
 }
 
 -- ═══════════════════════════════════════════════════════════════════════════
--- SPEED HACK LOGIC (INSTANT APPLY & FIXED)
+-- SPEED HACK LOGIC (NO BYPASS, INSTANT APPLY)
 -- ═══════════════════════════════════════════════════════════════════════════
 local function ApplySpeedHack(localPlayer)
     if not slua.isValid(localPlayer) then return end
@@ -89,62 +80,49 @@ local function ApplySpeedHack(localPlayer)
             state.OrigRun = CM.MaxCustomMovementSpeed or 600
             state.OrigCrouch = CM.MaxWalkSpeedCrouched or 300
             state.OrigSwim = CM.MaxSwimSpeed or 300
-            state.CurrentSpeed = state.OrigWalk
+            config.BaseSpeed = state.OrigWalk
         end
         
         if config.Enabled then
-            local multiplier = tonumber(config.Multiplier) or 5
+            -- Get slider value (1 to 100)
+            local percent = tonumber(config.SpeedMultiplier) or 100
+            if percent < 1 then percent = 1 end
+            if percent > 100 then percent = 100 end
             
-            -- Slider fix: গেমে স্লাইডার ১০০ দেখালেও আমরা কোডে ৫ ধরব
-            if multiplier > 5 then multiplier = 5 end
-            if multiplier < 1 then multiplier = 1 end
+            -- Calculate target speed (1x to 5x)
+            -- 1% = 1x (Normal), 100% = 5x (Max)
+            local multiplier = 1.0 + ((percent - 1) / 99.0) * 4.0
+            local targetSpeed = (state.OrigWalk or 600) * multiplier
             
-            local baseSpeed = state.OrigWalk or 600
-            local targetSpeed = baseSpeed * multiplier
-            
-            -- Combat/Jump bypass
-            if config.BypassEnabled then
-                if config.CombatSlowdown and (localPlayer.bIsWeaponFiring or localPlayer.bIsGunADS) then
-                    targetSpeed = targetSpeed * 0.8 -- কমায় না, শুধু একটু কমিয়ে ৮০% করে (সেফটির জন্য)
-                end
-                if config.JumpProtection and CM.MovementMode == EMovementMode.MOVE_Falling then
-                    targetSpeed = targetSpeed * 0.9 -- জাম্পের সময় ৯০% থাকে
-                end
-            end
-            
-            -- যেকোনো পরিবর্তন হলেই সাথে সাথে অ্যাপ্লাই হবে
-            if state.LastMultiplier ~= multiplier or math.abs(state.CurrentSpeed - targetSpeed) > 5 then
-                state.LastMultiplier = multiplier
-                state.CurrentSpeed = targetSpeed
-                state.Applied = true
+            -- Apply only if value changed
+            if math.abs(state.LastSpeed - targetSpeed) > 1.0 then
+                state.LastSpeed = targetSpeed
                 
-                -- Apply to character
+                -- Apply Speed
                 CM.MaxWalkSpeed = targetSpeed
                 CM.MaxCustomMovementSpeed = targetSpeed
-                CM.MaxWalkSpeedCrouched = targetSpeed * 0.5
-                CM.MaxSwimSpeed = targetSpeed * 0.5
+                CM.MaxWalkSpeedCrouched = targetSpeed * 0.6
+                CM.MaxSwimSpeed = targetSpeed * 0.6
                 
-                print(string.format("[SpeedHack] Fast Applied -> %dx (Speed: %.0f)", multiplier, targetSpeed))
+                print(string.format("[SpeedHack] Applied -> %d%% (%.0f Speed)", percent, targetSpeed))
             end
         else
             -- Restore when OFF
-            if state.Applied then
+            if state.LastSpeed > 0 then
                 CM.MaxWalkSpeed = state.OrigWalk or 600
                 CM.MaxCustomMovementSpeed = state.OrigRun or 600
                 CM.MaxWalkSpeedCrouched = state.OrigCrouch or 300
                 CM.MaxSwimSpeed = state.OrigSwim or 300
                 
-                state.LastMultiplier = 0
-                state.CurrentSpeed = state.OrigWalk or 600
-                state.Applied = false
-                print("[SpeedHack] Restored to normal")
+                state.LastSpeed = 0
+                print("[SpeedHack] Restored to Normal")
             end
         end
     end)
 end
 
 -- ═══════════════════════════════════════════════════════════════════════════
--- SPEED HACK LOOP (0.1s tick for instant feel)
+-- SPEED HACK LOOP (0.1s tick for smoothness)
 -- ═══════════════════════════════════════════════════════════════════════════
 local function SpeedHackTick()
     pcall(function()
@@ -159,7 +137,7 @@ local function SpeedHackTick()
     
     local okTicker, ticker = pcall(require, "common.time_ticker")
     if okTicker and ticker and ticker.AddTimerOnce then
-        ticker.AddTimerOnce(0.1, SpeedHackTick) -- 0.1s (আগে ছিল 0.2s)
+        ticker.AddTimerOnce(0.1, SpeedHackTick)
     end
 end
 
@@ -171,7 +149,7 @@ pcall(function()
 end)
 
 -- ═══════════════════════════════════════════════════════════════════════════
--- SPEED HACK MENU (FIXED SLIDER MAX VALUES)
+-- SPEED HACK MENU (CLEAN UI, NO BUGS)
 -- ═══════════════════════════════════════════════════════════════════════════
 function _G.InitSpeedHackMenu()
     if _G.SpeedHackMenuInitialized then return end
@@ -185,9 +163,7 @@ function _G.InitSpeedHackMenu()
     if LocUtil and not LocUtil._IsSpeedHackMenuHooked then
         local old_get = LocUtil.GetLocalizeResStr
         LocUtil.GetLocalizeResStr = function(id)
-            if type(id) == "string" and not tonumber(id) then
-                return id
-            end
+            if type(id) == "string" and not tonumber(id) then return id end
             return old_get(id)
         end
         LocUtil._IsSpeedHackMenuHooked = true
@@ -200,46 +176,27 @@ function _G.InitSpeedHackMenu()
         local AliasMap = require("client.slua.umg.NewSetting.Item.AliasMap")
         
         local StackSpeedHack = {
-            -- Main toggle
+            -- Main Toggle
             { Key = "ModMenu_Speed_Ex", UI = AliasMap.TitleSwitcher, 
-              Text = "⚡ SPEED HACK (1X - 5X)", ExpandIndex = 0, 
+              Text = "⚡ SPEED HACK (1% - 100%)", ExpandIndex = 0, 
               GetFunc = function() return _G.SpeedHackConfig.Enabled end, 
-              SetFunc = function(c,v) 
-                  _G.SpeedHackConfig.Enabled = v 
-                  if v == false then _G.SpeedHackState.LastMultiplier = 0 end
-                  return true 
-              end },
+              SetFunc = function(c,v) _G.SpeedHackConfig.Enabled = v return true end },
             
-            -- Multiplier Slider (1 to 5)
-            { Key = "ModMenu_Speed_Multiplier", UI = AliasMap.Slider, 
-              Text = "   MULTIPLIER (1=Normal, 5=Max 5x)", 
+            -- Slider (1 to 100)
+            { Key = "ModMenu_Speed_Value", UI = AliasMap.Slider, 
+              Text = "   SPEED PERCENTAGE (1=Normal, 100=Max)", 
               ExpandHandle = "ModMenu_Speed_Ex", 
-              MinValue = 1, MaxValue = 5, min = 1, max = 5,
-              GetFunc = function() return math.floor(_G.SpeedHackConfig.Multiplier or 5) end, 
+              MinValue = 1, MaxValue = 100, min = 1, max = 100,
+              GetFunc = function() 
+                  return math.floor(_G.SpeedHackConfig.SpeedMultiplier or 100) 
+              end, 
               SetFunc = function(c,v) 
                   local val = math.floor(v + 0.5)
                   if val < 1 then val = 1 end
-                  if val > 5 then val = 5 end
-                  _G.SpeedHackConfig.Multiplier = val
-                  _G.SpeedHackState.LastMultiplier = 0 -- Force instant update
+                  if val > 100 then val = 100 end
+                  _G.SpeedHackConfig.SpeedMultiplier = val
                   return true 
               end },
-            
-            -- ═══ BYPASS SECTION ═══
-            { Key = "ModMenu_Bypass_Ex", UI = AliasMap.TitleSwitcher, 
-              Text = "🛡️ ANTI-BAN BYPASS", ExpandIndex = 0, 
-              GetFunc = function() return _G.SpeedHackConfig.BypassEnabled end, 
-              SetFunc = function(c,v) _G.SpeedHackConfig.BypassEnabled = v return true end },
-            
-            { Key = "ModMenu_Bypass_Combat", UI = AliasMap.Switcher, 
-              Text = "   Combat Slowdown (Fire/Aim)", ExpandHandle = "ModMenu_Bypass_Ex",
-              GetFunc = function() return _G.SpeedHackConfig.CombatSlowdown end, 
-              SetFunc = function(c,v) _G.SpeedHackConfig.CombatSlowdown = v return true end },
-            
-            { Key = "ModMenu_Bypass_Jump", UI = AliasMap.Switcher, 
-              Text = "   Jump Protection", ExpandHandle = "ModMenu_Bypass_Ex",
-              GetFunc = function() return _G.SpeedHackConfig.JumpProtection end, 
-              SetFunc = function(c,v) _G.SpeedHackConfig.JumpProtection = v return true end },
         }
         
         SettingPageDefine.SpeedHackMenu = {
@@ -291,11 +248,10 @@ pcall(function()
 end)
 
 -- ═══════════════════════════════════════════════════════════════════════════
--- BRPlayerCharacterBase CLASS METHODS (Base code, must keep)
+-- BASE CHARACTER METHODS (Unchanged)
 -- ═══════════════════════════════════════════════════════════════════════════
 
-function BRPlayerCharacterBase:ctor()
-end
+function BRPlayerCharacterBase:ctor() end
 
 function BRPlayerCharacterBase:_PostConstruct()
   BRPlayerCharacterBase.__super._PostConstruct(self)
@@ -312,9 +268,7 @@ function BRPlayerCharacterBase:ReceiveBeginPlay()
       Game:AddComponent(CheckFallingDistanceComponent_C, self, "CheckFallingDistanceComponent")
     end
   end
-  if slua.isValid(self.STCharacterMovement) then
-    self.STCharacterMovement.bPositiveBlowUp = true
-  end
+  if slua.isValid(self.STCharacterMovement) then self.STCharacterMovement.bPositiveBlowUp = true end
   if self.Role == ENetRole.ROLE_AutonomousProxy then
     self:AddControlEvent(self, "OnPawnStateDisabled", self.OnPawnStateChange, self)
     self:AddControlEvent(self, "OnPawnStateEnabled", self.OnPawnStateChange, self)
