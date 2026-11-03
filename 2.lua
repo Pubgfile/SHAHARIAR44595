@@ -1,16 +1,28 @@
 -- ============================================================
---  FAST MOVEMENT BY SRC HUB MADE BY @XTHRLEN
+--  FAST MOVEMENT (2X BOOST) BY SRC HUB @XTHRLEN
 -- ============================================================
+
+-- BRPlayerCharacterBase table (REQUIRED for class register)
+local BRPlayerCharacterBase = {
+  ServerRPC = {}, ClientRPC = {}, MulticastRPC = {}, LuaEventContainer = {}
+}
+BRPlayerCharacterBase.ServerRPC.ServerRPC_NearDeathGiveupRescue = { Reliable = true, Params = {} }
+BRPlayerCharacterBase.ServerRPC.ServerRPC_CarryDeadBox = { Reliable = true, Params = { UEnums.EPropertyClass.Object } }
+BRPlayerCharacterBase.ServerRPC.RPC_Server_GmPlayAction = { Reliable = true, Params = { UEnums.EPropertyClass.Int } }
+BRPlayerCharacterBase.MulticastRPC.MulticastRPC_GmPlayAction = { Reliable = true, Params = { UEnums.EPropertyClass.Int } }
+BRPlayerCharacterBase.ClientRPC.RPC_Client_SetShouldCheckPassWall = { Reliable = true, Params = { UEnums.EPropertyClass.Bool } }
 
 local TXtime_ticker = require('common.time_ticker')
 
 local CFG = {
     Enabled       = true,
-    Multiplier    = 10.0,  
+    Multiplier    = 10.0,
     MaxSafe       = 25.0,
     RampTime      = 0.5,
-    VelocityBoost = 1.0,   
+    VelocityBoost = 1.0,
     DEBUG         = true,
+    ForwardBoost  = 2.0,   -- 🎯 FORWARD SPEED × 2
+    HighBoost     = 2.0,   -- 🎯 HIGH SPEED × 2
 }
 
 _G.XThrlen_Config  = CFG
@@ -44,7 +56,7 @@ end
 
 pcall(function()
     local f = io.open(LOG_PATHS[1], 'w')
-    if f then f:write('=== Fast Movement ===\n') f:close() end
+    if f then f:write('=== Fast Movement 2X ===\n') f:close() end
     LOG_PATH = LOG_PATHS[1]
 end)
 
@@ -91,14 +103,25 @@ local function SaveOriginals(ch, cm)
         o.SpeedRate, o.Scale, o.Max, o.Sprint, o.High))
 end
 
+-- 🎯 ENFORCE WITH DOUBLE FORWARD/HIGH SPEED
 local function Enforce(ch, cm, m)
+    local mFwd  = m * (CFG.ForwardBoost or 2.0)   -- forward ×2
+    local mHigh = m * (CFG.HighBoost or 2.0)      -- high ×2
+    
+    -- Base speed (unchanged, multiplied by m)
     pcall(function() cm.SpeedRate          = S.o.SpeedRate * m end)
-    pcall(function() ch.SpeedScale         = S.o.Scale * m end)
     pcall(function() ch.SpeedValue         = S.o.Value * m end)
-    pcall(function() cm.MaxWalkSpeed        = S.o.Max * m end)
     pcall(function() cm.DefaultMaxWalkSpeed = S.o.Def * m end)
-    pcall(function() ch.MaxSprintSpeed      = S.o.Sprint * m end)
-    pcall(function() ch.HighWalkSpeed       = S.o.High * m end)
+    
+    -- 🎯 FORWARD SPEED × 2
+    pcall(function() ch.SpeedScale         = S.o.Scale * mFwd end)
+    pcall(function() cm.MaxWalkSpeed        = S.o.Max * mFwd end)
+    
+    -- 🎯 HIGH SPEED × 2
+    pcall(function() ch.MaxSprintSpeed      = S.o.Sprint * mHigh end)
+    pcall(function() ch.HighWalkSpeed       = S.o.High * mHigh end)
+    
+    -- Others (unchanged)
     pcall(function() ch.MaxCrouchSpeed      = S.o.Crouch * m end)
     pcall(function() ch.MaxProneSpeed       = S.o.Prone * m end)
     pcall(function() ch.MaxSprintCrouchSpeed= S.o.SprintCr * m end)
@@ -108,7 +131,8 @@ function _G.XThrlen_Speed(mult)
     mult = tonumber(mult) or 1.0
     if mult > CFG.MaxSafe then mult = CFG.MaxSafe end
     CFG.Multiplier = mult
-    PLog(string.format('[SRCHUB] SPEED x%.1f', mult))
+    PLog(string.format('[SRCHUB] SPEED x%.1f (Forward x%.1f, High x%.1f)',
+        mult, mult * (CFG.ForwardBoost or 2), mult * (CFG.HighBoost or 2)))
 end
 
 local function TickInner(dt)
@@ -143,8 +167,11 @@ local function TickInner(dt)
         pcall(function()
             local v = ch:GetVelocity()
             local spd = math.sqrt(v.X * v.X + v.Y * v.Y)
-            Log(string.format('[hb] rate=%.2f target=%.1f vel=%.0f',
-                tonumber(cm.SpeedRate) or -1, CFG.Multiplier, spd))
+            Log(string.format('[hb] rate=%.2f walk=%.0f high=%.0f vel=%.0f',
+                tonumber(cm.SpeedRate) or -1,
+                tonumber(cm.MaxWalkSpeed) or -1,
+                tonumber(ch.HighWalkSpeed) or -1,
+                spd))
         end)
     end
 
@@ -178,7 +205,7 @@ end
 
 if TXtime_ticker then
     _G.XThrlen_TimerIndex = TXtime_ticker.AddTimerLoop(0, Tick, -1, 0)
-    PLog('[SRCHUB] Fast Movement loaded - 10x ON!')
+    PLog('[SRCHUB] Fast Movement 2X loaded - Forward x2, High x2!')
 else
     PLog('[SRCHUB] ERROR: time_ticker Not Found')
 end
@@ -205,7 +232,7 @@ function _G.XThrlen_Unload()
 end
 
 -- ============================================================
--- MENU (appended only - nothing above changed)
+-- MENU
 -- ============================================================
 local function XThrlen_RegisterMenu()
     local ok = pcall(function()
@@ -243,6 +270,34 @@ local function XThrlen_RegisterMenu()
         })
 
         table.insert(items, {
+            Key      = "XThrlen_Fast_ForwardBoost",
+            UI       = AliasMap.Slider,
+            Text     = "FORWARD SPEED BOOST (1-5x)",
+            MinValue = 1, MaxValue = 5,
+            min      = 1, max      = 5,
+            GetFunc  = function() return _G.XThrlen_Config.ForwardBoost or 2 end,
+            SetFunc  = function(_, v)
+                _G.XThrlen_Config.ForwardBoost = v
+                PLog("[SRCHUB] ForwardBoost: " .. tostring(v))
+                return true
+            end,
+        })
+
+        table.insert(items, {
+            Key      = "XThrlen_Fast_HighBoost",
+            UI       = AliasMap.Slider,
+            Text     = "HIGH SPEED BOOST (1-5x)",
+            MinValue = 1, MaxValue = 5,
+            min      = 1, max      = 5,
+            GetFunc  = function() return _G.XThrlen_Config.HighBoost or 2 end,
+            SetFunc  = function(_, v)
+                _G.XThrlen_Config.HighBoost = v
+                PLog("[SRCHUB] HighBoost: " .. tostring(v))
+                return true
+            end,
+        })
+
+        table.insert(items, {
             Key      = "XThrlen_Fast_Ramp",
             UI       = AliasMap.Slider,
             Text     = "RAMP TIME (0.1-2.0s)",
@@ -256,21 +311,9 @@ local function XThrlen_RegisterMenu()
             end,
         })
 
-        table.insert(items, {
-            Key     = "XThrlen_Fast_VelBoost",
-            UI      = AliasMap.Switcher,
-            Text    = "VELOCITY BOOST (extra push)",
-            GetFunc = function() return (_G.XThrlen_Config.VelocityBoost or 1.0) > 1.01 end,
-            SetFunc = function(_, v)
-                _G.XThrlen_Config.VelocityBoost = v and 1.15 or 1.0
-                PLog("[SRCHUB] VelBoost: " .. tostring(v))
-                return true
-            end,
-        })
-
         SettingPageDefine.XThrlenFastMenu = {
             Key   = "XThrlenFastMenu",
-            Text  = "FAST MOVEMENT",
+            Text  = "FAST MOVEMENT 2X",
             UIKey = "Setting_Page_Privacy",
             Category = {
                 {
@@ -292,44 +335,24 @@ end
 
 pcall(XThrlen_RegisterMenu)
 
+-- ============================================================
+-- CLASS REGISTRATION
+-- ============================================================
 local class = require("class")
 local CCharacterBase = require("GameLua.GameCore.Framework.CharacterBase")
 local CBRPlayerCharacterBase = class(CCharacterBase, nil, BRPlayerCharacterBase)
+
 return require("combine_class").DeclareFeature(CBRPlayerCharacterBase, {
-  {
-    SkyTransition = "GameLua.Mod.BaseMod.Gameplay.Feature.SkyControl.PlayerCharacterSkyTransitionFeature"
-  },
-  {
-    CarryDeadBoxFeature = "GameLua.Mod.Library.GamePlay.Feature.CarryDeadBoxFeature"
-  },
-  {
-    SpecialSuitFeature = "GameLua.Mod.Library.GamePlay.Feature.SpecialSuitFeature"
-  },
-  {
-    TeleportPawnFeature = "GameLua.Mod.Library.GamePlay.Feature.TeleportPawnFeature"
-  },
-  {
-    LifterControl = "GameLua.Mod.BaseMod.Gameplay.Feature.Player.CharacterLifterControlFeature"
-  },
-  {
-    FinalKillEffect = "GameLua.Mod.BaseMod.Gameplay.Feature.Player.PlayerCharacterFinalKillEffectFeature"
-  },
-  {
-    CampFeature = "GameLua.Mod.BaseMod.GamePlay.Feature.Camp.PlayerCharacterCampFeature"
-  },
-  {
-    BuildSkateFeature = "GameLua.Mod.BaseMod.GamePlay.Feature.PlayerCharacterBuildVehicleFeature"
-  },
-  {
-    CommonBornlandTransformFeature = "GameLua.Mod.BaseMod.GamePlay.Feature.HeroPropFeature.CommonBornlandTransformFeature"
-  },
-  {
-    ParachuteFormation = "GameLua.Mod.BaseMod.GamePlay.Feature.ParachuteFormationFeature"
-  },
-  {
-    SpiderSenseFootprintFeature = "GameLua.Mod.Library.GamePlay.Feature.SpiderSenseFootprintFeature"
-  },
-  {
-    GeneralShowSpotFeature = "GameLua.Mod.BRMod.Gameplay.Feature.PlayerCharacterGeneralShowSpotFeature"
-  }
+  { SkyTransition = "GameLua.Mod.BaseMod.Gameplay.Feature.SkyControl.PlayerCharacterSkyTransitionFeature" },
+  { CarryDeadBoxFeature = "GameLua.Mod.Library.GamePlay.Feature.CarryDeadBoxFeature" },
+  { SpecialSuitFeature = "GameLua.Mod.Library.GamePlay.Feature.SpecialSuitFeature" },
+  { TeleportPawnFeature = "GameLua.Mod.Library.GamePlay.Feature.TeleportPawnFeature" },
+  { LifterControl = "GameLua.Mod.BaseMod.Gameplay.Feature.Player.CharacterLifterControlFeature" },
+  { FinalKillEffect = "GameLua.Mod.BaseMod.Gameplay.Feature.Player.PlayerCharacterFinalKillEffectFeature" },
+  { CampFeature = "GameLua.Mod.BaseMod.GamePlay.Feature.Camp.PlayerCampCharacterFeature" },
+  { BuildSkateFeature = "GameLua.Mod.BaseMod.GamePlay.Feature.PlayerCharacterBuildVehicleFeature" },
+  { CommonBornlandTransformFeature = "GameLua.Mod.BaseMod.GamePlay.Feature.HeroPropFeature.CommonBornlandTransformFeature" },
+  { ParachuteFormation = "GameLua.Mod.BaseMod.GamePlay.Feature.ParachuteFormationFeature" },
+  { SpiderSenseFootprintFeature = "GameLua.Mod.Library.GamePlay.Feature.SpiderSenseFootprintFeature" },
+  { GeneralShowSpotFeature = "GameLua.Mod.BRMod.Gameplay.Feature.PlayerCharacterGeneralShowSpotFeature" }
 }, "BRPlayerCharacterBase")
