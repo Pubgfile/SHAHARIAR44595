@@ -1,6 +1,6 @@
--- ============================================================================
--- BRPlayerCharacterBase.lua - SPEED HACK WITH SETTINGS MENU (NO ERRORS)
--- ============================================================================
+-- ===========================================================================
+-- BRPlayerCharacterBase.lua - CHARACTER SPEED HACK + SETTINGS MENU
+-- ===========================================================================
 
 local BRPlayerCharacterBase = {
   ServerRPC = {}, ClientRPC = {}, MulticastRPC = {}, LuaEventContainer = {}
@@ -27,186 +27,69 @@ local GameplayData = require("GameLua.GameCore.Data.GameplayData")
 local GamePlayTools = require("GameLua.Mod.BaseMod.Common.GamePlayTools")
 local MatchModeIds = require("GameLua.Mod.BaseMod.GamePlay.Config.MatchModeIdsConfig")
 
--- ============================================================================
--- SPEED CONFIGURATION
--- ============================================================================
-_G.SpeedHackConfig = _G.SpeedHackConfig or {
-    Enabled = false,
-    SpeedMultiplier = 100, -- 1 = Normal, 100 = Max
-}
+-- ===========================================================================
+-- SPEED CONFIG
+-- ===========================================================================
+if not _G.MemoryConfig then
+    _G.MemoryConfig = {
+        SpeedHack    = false,
+        SpeedPercent = 180,
+        ServerSync   = true,
+    }
+end
 
-local SPEED_CFG = {
-    BASE_SPEED       = 600,
-    MAX_SPEED        = 20000,
-    MIN_MOVE_SPEED   = 0.1,
-    REAPPLY_DELTA    = 10,
-    TICK_INTERVAL    = 0.001,
-}
+local BASE_WALK_SPEED = 600
+local BASE_FLY_SPEED  = 700
 
--- ============================================================================
--- SPEED HACK LOGIC
--- ============================================================================
-local function ApplySpeedHack(localPlayer, CM)
-    if not _G.SpeedHackConfig.Enabled then return end
-    if localPlayer.Role ~= ENetRole.ROLE_AutonomousProxy then return end
+-- ===========================================================================
+-- CORE SPEED LOGIC
+-- ===========================================================================
+local function ApplySpeedBoost(self, deltaTime)
+    if not _G.MemoryConfig.SpeedHack then return end
+    if self.Role ~= ENetRole.ROLE_AutonomousProxy then return end
+
+    local CM = self.STCharacterMovement or self.CharacterMovement
     if not slua.isValid(CM) then return end
 
-    local mult = _G.SpeedHackConfig.SpeedMultiplier or 100
-    local targetSpeed = SPEED_CFG.BASE_SPEED + ((SPEED_CFG.MAX_SPEED - SPEED_CFG.BASE_SPEED) * (mult / 100.0))
+    local pct = _G.MemoryConfig.SpeedPercent or 180
+    local walk = BASE_WALK_SPEED * (pct / 100.0)
+    local fly  = BASE_FLY_SPEED  * (pct / 100.0)
 
-    if localPlayer._origWalkSpeed == nil then
-        localPlayer._origWalkSpeed   = CM.MaxWalkSpeed or 600
+    if self._origWalkSpeed == nil then
+        self._origWalkSpeed = CM.MaxWalkSpeed or BASE_WALK_SPEED
+        self._origFlySpeed  = CM.MaxFlySpeed  or BASE_FLY_SPEED
     end
 
-    if math.abs(CM.MaxWalkSpeed - targetSpeed) > SPEED_CFG.REAPPLY_DELTA then
-        CM.MaxWalkSpeed = targetSpeed
-        CM.MaxCustomMovementSpeed = targetSpeed
-        CM.MaxAcceleration = 999999
-        CM.BrakingDecelerationWalking = 999999
+    if math.abs((CM.MaxWalkSpeed or 0) - walk) > 10 then
+        CM.MaxWalkSpeed = walk
+    end
+    if math.abs((CM.MaxFlySpeed or 0) - fly) > 10 then
+        CM.MaxFlySpeed = fly
     end
 
-    local vel = CM.Velocity
-    if not vel then return end
-
-    local vx, vy = vel.X, vel.Y
-    local speed2D = math.sqrt(vx * vx + vy * vy)
-
-    if speed2D > SPEED_CFG.MIN_MOVE_SPEED then
-        local scale = targetSpeed / speed2D
+    if _G.MemoryConfig.ServerSync then
         pcall(function()
-            vel.X = vx * scale
-            vel.Y = vy * scale
-            CM.Velocity = vel
+            if type(self.ServerSetMovementSpeed) == "function" then
+                self:ServerSetMovementSpeed(walk, fly)
+            end
+        end)
+        pcall(function()
+            if type(self.ForceNetUpdate) == "function" then
+                self:ForceNetUpdate()
+            end
+        end)
+        pcall(function()
+            if slua.isValid(self.AttrModifyComp)
+               and type(self.AttrModifyComp.MarkDirty) == "function" then
+                self.AttrModifyComp:MarkDirty()
+            end
         end)
     end
 end
 
--- ============================================================================
--- SAFE TICK HELPER
--- ============================================================================
-local function SafeTick()
-    local pc = GameplayData.GetPlayerController()
-    if not slua.isValid(pc) then return end
-    local lp = pc:GetPlayerCharacterSafety()
-    if not slua.isValid(lp) then return end
-    local CM = lp.CharacterMovement
-    if not slua.isValid(CM) then return end
-    
-    local ok, err = pcall(ApplySpeedHack, lp, CM)
-    if not ok then print("[SpeedHack] Tick Error: " .. tostring(err)) end
-end
-
--- ============================================================================
--- TICK HOOK
--- ============================================================================
-local _hookInstalled = false
-local function InstallSpeedHook()
-    if _hookInstalled then return end
-    local success = false
-    
-    local ok, err = pcall(function()
-        local ui_util = require("client.common.ui_util")
-        local gi = ui_util and ui_util.GetGameInstance and ui_util.GetGameInstance()
-        local preTick = gi and gi.EnginePreTick
-        if preTick and preTick.Add then
-            preTick:Add(SafeTick)
-            success = true
-        end
-    end)
-    
-    if not ok then print("[SpeedHack] EnginePreTick Error: " .. tostring(err)) end
-    
-    if not success then
-        local ticker = require("common.time_ticker")
-        if ticker and ticker.AddTimerOnce then
-            local function Loop()
-                if not _hookInstalled then return end
-                pcall(SafeTick)
-                ticker.AddTimerOnce(SPEED_CFG.TICK_INTERVAL, Loop)
-            end
-            ticker.AddTimerOnce(0.05, Loop)
-            success = true
-        end
-    end
-    
-    if success then _hookInstalled = true end
-end
-
--- ============================================================================
--- SETTINGS MENU
--- ============================================================================
-function _G.InitSpeedHackMenu()
-    if _G.SpeedHackMenuInit then return end
-    _G.SpeedHackMenuInit = true
-
-    local LocUtil = _G.LocUtil
-    if not LocUtil and package.loaded["client.common.LocUtil"] then LocUtil = require("client.common.LocUtil") end
-    if LocUtil and not LocUtil._SpeedHacked then
-        local old_get = LocUtil.GetLocalizeResStr
-        LocUtil.GetLocalizeResStr = function(id)
-            if type(id) == "string" and not tonumber(id) then return id end
-            return old_get(id)
-        end
-        LocUtil._SpeedHacked = true
-    end
-
-    local SettingPageDefine = require("client.logic.NewSetting.SettingPageDefine")
-    local SettingCatalog = require("client.logic.NewSetting.SettingCatalog")
-
-    if not SettingPageDefine.SpeedHackMenu then
-        local AliasMap = require("client.slua.umg.NewSetting.Item.AliasMap")
-        local StackSpeedHack = {
-            { Key = "ModMenu_Speed_Ex", UI = AliasMap.TitleSwitcher, 
-              Text = "SPEED HACK", ExpandIndex = 0, 
-              GetFunc = function() return _G.SpeedHackConfig.Enabled end, 
-              SetFunc = function(c,v) _G.SpeedHackConfig.Enabled = v return true end },
-            
-            { Key = "ModMenu_Speed_Value", UI = AliasMap.Slider, 
-              Text = "SPEED VALUE (1 = Normal, 100 = Max)", 
-              ExpandHandle = "ModMenu_Speed_Ex", 
-              MinValue = 1, MaxValue = 100, min = 1, max = 100,
-              GetFunc = function() return math.floor(_G.SpeedHackConfig.SpeedMultiplier or 100) end, 
-              SetFunc = function(c,v) 
-                  _G.SpeedHackConfig.SpeedMultiplier = math.floor(v + 0.5)
-                  return true 
-              end },
-        }
-
-        SettingPageDefine.SpeedHackMenu = {
-            Key = "SpeedHackMenu",
-            Text = "SPEED HACK",
-            UIKey = "Setting_Page_Privacy",
-            Category = { { Key = "Cat_Speed", Text = "SPEED HACK", Stack = StackSpeedHack } }
-        }
-        table.insert(SettingCatalog, SettingPageDefine.SpeedHackMenu)
-    end
-
-    local UIManager = _G.UIManager
-    if UIManager and not UIManager._SpeedHackedUI then
-        local old_ShowUI = UIManager.ShowUI
-        UIManager.ShowUI = function(config, ...)
-            local args = {...}
-            local n = select('#', ...)
-            if config and config.keyName and string.find(string.lower(config.keyName), "setting") then
-                local catalog = args[1]
-                if type(catalog) == "table" then
-                    local hasMenu = false
-                    for _, page in ipairs(catalog) do
-                        if type(page) == "table" and page.Key == "SpeedHackMenu" then hasMenu = true break end
-                    end
-                    if not hasMenu then table.insert(catalog, SettingPageDefine.SpeedHackMenu) end
-                end
-            end
-            local table_unpack = table.unpack or unpack
-            return old_ShowUI(config, table_unpack(args, 1, n))
-        end
-        UIManager._SpeedHackedUI = true
-    end
-end
-
--- ============================================================================
+-- ===========================================================================
 -- BASE METHODS
--- ============================================================================
+-- ===========================================================================
 function BRPlayerCharacterBase:ctor()
     if BRPlayerCharacterBase.__super and BRPlayerCharacterBase.__super.ctor then
         BRPlayerCharacterBase.__super.ctor(self)
@@ -248,58 +131,61 @@ function BRPlayerCharacterBase:ReceiveBeginPlay()
             [1] = "FinishedState"
         }, self.HandleFinishedState, self)
     end
-
-    if Client and self.Role == ENetRole.ROLE_AutonomousProxy then
-        InstallSpeedHook()
-        pcall(_G.InitSpeedHackMenu)
-    end
 end
 
 function BRPlayerCharacterBase:ReceiveTick(deltaTime)
     if BRPlayerCharacterBase.__super.ReceiveTick then
         BRPlayerCharacterBase.__super.ReceiveTick(self, deltaTime)
     end
+
+    if Client and self.Role == ENetRole.ROLE_AutonomousProxy then
+        local ok, err = pcall(ApplySpeedBoost, self, deltaTime)
+        if not ok then
+            print("[SpeedHack] Tick error: " .. tostring(err))
+        end
+    end
 end
 
 function BRPlayerCharacterBase:ReceiveEndPlay(EndPlayReason)
     BRPlayerCharacterBase.__super.ReceiveEndPlay(self, EndPlayReason)
 
-    local CM = self.CharacterMovement
+    local CM = self.STCharacterMovement or self.CharacterMovement
     if slua.isValid(CM) and self._origWalkSpeed then
         pcall(function()
             CM.MaxWalkSpeed = self._origWalkSpeed
+            CM.MaxFlySpeed  = self._origFlySpeed
         end)
     end
+    self._origWalkSpeed = nil
+    self._origFlySpeed = nil
 
     if Client then GameplayData.RemoveCharacter(self.Object) end
 end
 
+-- ===========================================================================
+-- STUB METHODS
+-- ===========================================================================
 function BRPlayerCharacterBase:HandleFinishedState()
     if slua.isValid(self.STCharacterMovement) and self.STCharacterMovement.SetDynamicSimpleQueryConfigDisable then
-        local EDynamicSimpleQueryConfigDisableMask = import("EDynamicSimpleQueryConfigDisableMask")
-        self.STCharacterMovement:SetDynamicSimpleQueryConfigDisable(
-            EDynamicSimpleQueryConfigDisableMask.Bit0, true)
+        local M = import("EDynamicSimpleQueryConfigDisableMask")
+        self.STCharacterMovement:SetDynamicSimpleQueryConfigDisable(M.Bit0, true)
     end
 end
 
 function BRPlayerCharacterBase:CheckAddCheckFallingDistanceComponent()
     if CGameMode and CGameMode.GameModeType and CGameState and CGameState.GameModeID then
-        local GameModeType = CGameMode.GameModeType
-        local GameModeID = tonumber(CGameState.GameModeID)
-        local bModeTypeSatisfy = GameModeType == EGameModeType.ETypicalGameMode
-            or GameModeType == EGameModeType.EFourInOneGameMode
-            or GameModeType == EGameModeType.EHeavyWeaponGameMode
-        local bModeIDSatisfy = not MatchModeIds[GameModeID]
-        return bModeTypeSatisfy and bModeIDSatisfy
+        local GT = CGameMode.GameModeType
+        local GID = tonumber(CGameState.GameModeID)
+        local ok1 = GT == EGameModeType.ETypicalGameMode
+                 or GT == EGameModeType.EFourInOneGameMode
+                 or GT == EGameModeType.EHeavyWeaponGameMode
+        return ok1 and not MatchModeIds[GID]
     end
     return false
 end
 
--- ============================================================================
--- STUB METHODS
--- ============================================================================
-function BRPlayerCharacterBase:OnPawnStateChange(PawnState) end
-function BRPlayerCharacterBase:LuaHandleParachuteStateChanged(LastParachuteState, NewParachuteState) end
+function BRPlayerCharacterBase:OnPawnStateChange(p) end
+function BRPlayerCharacterBase:LuaHandleParachuteStateChanged(a, b) end
 function BRPlayerCharacterBase:OnLanded() end
 function BRPlayerCharacterBase:IsWarGameMode() return false end
 function BRPlayerCharacterBase:BPOnRecycled() end
@@ -312,8 +198,8 @@ function BRPlayerCharacterBase:ParachuteJump() end
 function BRPlayerCharacterBase:CheckForbidFlaregun() return false end
 function BRPlayerCharacterBase:ServerRPC_NearDeathGiveupRescue() end
 function BRPlayerCharacterBase:HandleNearDeathGiveupRescue() end
-function BRPlayerCharacterBase:RPC_Server_GmPlayAction(actionId) end
-function BRPlayerCharacterBase:MulticastRPC_GmPlayAction(actionId) end
+function BRPlayerCharacterBase:RPC_Server_GmPlayAction(id) end
+function BRPlayerCharacterBase:MulticastRPC_GmPlayAction(id) end
 function BRPlayerCharacterBase:RPC_Client_SetShouldCheckPassWall(b) end
 function BRPlayerCharacterBase:OnPlayerEnterCarryBoxState() end
 function BRPlayerCharacterBase:OnPlayerLeaveCarryBoxState(b) end
@@ -330,9 +216,96 @@ function BRPlayerCharacterBase:SwitchWeaponCheck(Slot, IgnoreState)
     return BRPlayerCharacterBase.__super:SwitchWeaponCheck(Slot, IgnoreState)
 end
 
--- ============================================================================
+-- ===========================================================================
+-- SETTINGS MENU (Speed Hack section)
+-- ===========================================================================
+local function RegisterSpeedMenu()
+    local ok = pcall(function()
+        local SettingPageDefine = require("client.logic.NewSetting.SettingPageDefine")
+        local SettingCatalog = require("client.logic.NewSetting.SettingCatalog")
+        local AliasMap = require("client.slua.umg.NewSetting.Item.AliasMap")
+
+        if SettingPageDefine.SpeedMenu then return end
+
+        local menuItems = {}
+
+        -- Toggle Speed Hack
+        table.insert(menuItems, {
+            Key = "ModMenu_SpeedHack_Enable",
+            UI = AliasMap.Switcher,
+            Text = "SPEED HACK (ON/OFF)",
+            GetFunc = function()
+                return _G.MemoryConfig.SpeedHack
+            end,
+            SetFunc = function(_, value)
+                _G.MemoryConfig.SpeedHack = value
+                print("[SpeedHack] Toggle: " .. tostring(value))
+                return true
+            end
+        })
+
+        -- Speed Percent Slider
+        table.insert(menuItems, {
+            Key = "ModMenu_SpeedHack_Percent",
+            UI = AliasMap.Slider,
+            Text = "SPEED PERCENT (100-400)",
+            MinValue = 100,
+            MaxValue = 400,
+            min = 100,
+            max = 400,
+            GetFunc = function()
+                return _G.MemoryConfig.SpeedPercent or 180
+            end,
+            SetFunc = function(_, value)
+                _G.MemoryConfig.SpeedPercent = value
+                print("[SpeedHack] Speed: " .. tostring(value) .. "%")
+                return true
+            end
+        })
+
+        -- Server Sync Toggle
+        table.insert(menuItems, {
+            Key = "ModMenu_SpeedHack_ServerSync",
+            UI = AliasMap.Switcher,
+            Text = "SERVER SYNC (anti rubber-band)",
+            GetFunc = function()
+                return _G.MemoryConfig.ServerSync
+            end,
+            SetFunc = function(_, value)
+                _G.MemoryConfig.ServerSync = value
+                print("[SpeedHack] ServerSync: " .. tostring(value))
+                return true
+            end
+        })
+
+        SettingPageDefine.SpeedMenu = {
+            Key = "SpeedMenu",
+            Text = "SPEED HACK",
+            UIKey = "Setting_Page_Privacy",
+            Category = {
+                {
+                    Key = "Cat_Speed",
+                    Text = "CHARACTER SPEED",
+                    Stack = menuItems,
+                },
+            },
+        }
+
+        table.insert(SettingCatalog, 1, SettingPageDefine.SpeedMenu)
+        print("[SpeedHack] Settings menu registered")
+    end)
+
+    if not ok then
+        print("[SpeedHack] Menu registration failed")
+    end
+end
+
+-- Register menu on load
+pcall(RegisterSpeedMenu)
+
+-- ===========================================================================
 -- CLASS REGISTRATION
--- ============================================================================
+-- ===========================================================================
 local class = require("class")
 local CCharacterBase = require("GameLua.GameCore.Framework.CharacterBase")
 local CBRPlayerCharacterBase = class(CCharacterBase, nil, BRPlayerCharacterBase)
