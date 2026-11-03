@@ -1,5 +1,5 @@
 -- ═══════════════════════════════════════════════════════════════════════════
--- BRPlayerCharacterBase.lua - SAFE SPEED HACK 5X + ANTI-BAN BYPASS
+-- BRPlayerCharacterBase.lua - FIXED 5X SPEED HACK (INSTANT APPLY)
 -- ═══════════════════════════════════════════════════════════════════════════
 
 local BRPlayerCharacterBase = {
@@ -46,21 +46,17 @@ local GamePlayTools = require("GameLua.Mod.BaseMod.Common.GamePlayTools")
 local MatchModeIds = require("GameLua.Mod.BaseMod.GamePlay.Config.MatchModeIdsConfig")
 
 -- ═══════════════════════════════════════════════════════════════════════════
--- SPEED HACK CONFIG WITH BYPASS SETTINGS
+-- SPEED HACK CONFIG (FIXED FOR SLIDER)
 -- ═══════════════════════════════════════════════════════════════════════════
 _G.SpeedHackConfig = _G.SpeedHackConfig or {
     Enabled = false,
     Multiplier = 5,              -- 1x to 5x
-    
-    -- ═══ BYPASS SETTINGS ═══
-    BypassEnabled = true,        -- Master switch for bypass
-    ServerMaxSpeed = 900,        -- Server sees max 900 (safe)
-    RampUpSpeed = 200,           -- Speed per second increase
-    CombatSlowdown = true,       -- Slow down when firing
-    AutoIdleReset = true,        -- Periodic reset to normal
-    AutoIdleInterval = 8,        -- Reset every 8 seconds
-    SafeZoneOnly = false,        -- Only apply in safe areas
-    JumpProtection = true,       -- Reduce speed while jumping
+    BypassEnabled = true,
+    CombatSlowdown = true,
+    JumpProtection = true,
+    AutoIdleReset = false,       -- অটো রিসেট বন্ধ করে দিলাম যাতে স্পিড না কমে
+    RampUpSpeed = 3000,          -- র‍্যাম্প স্পিড বাড়িয়ে দিলাম যাতে সাথে সাথে ফুল স্পিড হয়
+    ServerMaxSpeed = 1200,       -- সার্ভার ম্যাক্স বাড়িয়ে দিলাম
 }
 
 _G.SpeedHackState = _G.SpeedHackState or {
@@ -71,116 +67,11 @@ _G.SpeedHackState = _G.SpeedHackState or {
     OrigCrouch = nil,
     OrigSwim = nil,
     CurrentSpeed = 0,
-    TargetSpeed = 0,
-    LastCombatCheck = 0,
     LastIdleReset = 0,
-    IsCombat = false,
-    IsJumping = false,
-    IsInSafeState = false,
 }
 
 -- ═══════════════════════════════════════════════════════════════════════════
--- BYPASS: DETECT COMBAT STATE
--- ═══════════════════════════════════════════════════════════════════════════
-local function DetectCombatState(localPlayer)
-    local combat = false
-    pcall(function()
-        -- Check firing
-        if localPlayer.bIsWeaponFiring == true then combat = true end
-        -- Check aiming
-        if localPlayer.bIsGunADS == true then combat = true end
-        -- Check recent damage (last 3 seconds)
-        if localPlayer.LastDamageTime then
-            local timeSince = os.clock() - localPlayer.LastDamageTime
-            if timeSince < 3.0 then combat = true end
-        end
-    end)
-    return combat
-end
-
--- ═══════════════════════════════════════════════════════════════════════════
--- BYPASS: DETECT JUMP STATE
--- ═══════════════════════════════════════════════════════════════════════════
-local function DetectJumpState(localPlayer)
-    local jumping = false
-    pcall(function()
-        local CM = localPlayer.CharacterMovement
-        if slua.isValid(CM) then
-            if CM.MovementMode == EMovementMode.MOVE_Falling then
-                jumping = true
-            end
-            if CM.IsFalling and CM:IsFalling() then
-                jumping = true
-            end
-        end
-    end)
-    return jumping
-end
-
--- ═══════════════════════════════════════════════════════════════════════════
--- BYPASS: CALCULATE SAFE SPEED
--- ═══════════════════════════════════════════════════════════════════════════
-local function CalculateSafeSpeed(baseSpeed, multiplier, combat, jumping)
-    local targetSpeed = baseSpeed * multiplier
-    
-    -- Bypass not enabled -> return as-is (unsafe)
-    if not _G.SpeedHackConfig.BypassEnabled then
-        return targetSpeed
-    end
-    
-    -- Combat slowdown (50% reduction)
-    if _G.SpeedHackConfig.CombatSlowdown and combat then
-        targetSpeed = targetSpeed * 0.5
-    end
-    
-    -- Jump protection (30% reduction)
-    if _G.SpeedHackConfig.JumpProtection and jumping then
-        targetSpeed = targetSpeed * 0.7
-    end
-    
-    -- Auto ramp-up (gradual increase)
-    local state = _G.SpeedHackState
-    local current = state.CurrentSpeed or baseSpeed
-    local maxChange = _G.SpeedHackConfig.RampUpSpeed * 0.2  -- 200/sec -> 40 per tick (0.2s tick)
-    
-    if current < targetSpeed then
-        targetSpeed = math.min(current + maxChange, targetSpeed)
-    elseif current > targetSpeed then
-        targetSpeed = math.max(current - maxChange * 2, targetSpeed)  -- Faster decrease
-    end
-    
-    return targetSpeed
-end
-
--- ═══════════════════════════════════════════════════════════════════════════
--- BYPASS: SERVER REPLICATION MASKING
--- Server এ normal speed দেখাবে (client e 5x)
--- ═══════════════════════════════════════════════════════════════════════════
-local function ApplyServerMasking(CM, realSpeed)
-    if not _G.SpeedHackConfig.BypassEnabled then
-        return realSpeed
-    end
-    
-    -- Save real speed to CustomMovementSpeed (not replicated)
-    -- and set replicated MaxWalkSpeed to safe value
-    pcall(function()
-        local safeSpeed = math.min(realSpeed, _G.SpeedHackConfig.ServerMaxSpeed)
-        
-        -- MaxWalkSpeed is replicated - server sees this
-        CM.MaxWalkSpeed = safeSpeed
-        
-        -- MaxCustomMovementSpeed might not be replicated - use for real speed
-        -- (depends on game version)
-        if CM.MaxCustomMovementSpeed ~= nil then
-            CM.MaxCustomMovementSpeed = realSpeed
-        end
-    end)
-    
-    return realSpeed
-end
-
--- ═══════════════════════════════════════════════════════════════════════════
--- MAIN SPEED HACK LOGIC WITH BYPASS
+-- SPEED HACK LOGIC (INSTANT APPLY & FIXED)
 -- ═══════════════════════════════════════════════════════════════════════════
 local function ApplySpeedHack(localPlayer)
     if not slua.isValid(localPlayer) then return end
@@ -192,69 +83,51 @@ local function ApplySpeedHack(localPlayer)
         local state = _G.SpeedHackState
         local config = _G.SpeedHackConfig
         
-        -- Save original values first time
+        -- Save original values (first time)
         if not state.OrigWalk then
             state.OrigWalk = CM.MaxWalkSpeed or 600
             state.OrigRun = CM.MaxCustomMovementSpeed or 600
             state.OrigCrouch = CM.MaxWalkSpeedCrouched or 300
             state.OrigSwim = CM.MaxSwimSpeed or 300
             state.CurrentSpeed = state.OrigWalk
-            print(string.format("[SpeedHack] Original saved: Walk=%s Crouch=%s Swim=%s",
-                tostring(state.OrigWalk), tostring(state.OrigCrouch), tostring(state.OrigSwim)))
         end
         
         if config.Enabled then
             local multiplier = tonumber(config.Multiplier) or 5
+            
+            -- Slider fix: গেমে স্লাইডার ১০০ দেখালেও আমরা কোডে ৫ ধরব
             if multiplier > 5 then multiplier = 5 end
             if multiplier < 1 then multiplier = 1 end
             
-            local now = os.clock()
+            local baseSpeed = state.OrigWalk or 600
+            local targetSpeed = baseSpeed * multiplier
             
-            -- ═══ BYPASS: Detect states ═══
-            local isCombat = DetectCombatState(localPlayer)
-            local isJumping = DetectJumpState(localPlayer)
-            
-            -- ═══ BYPASS: Auto idle reset ═══
-            if config.AutoIdleReset and config.BypassEnabled then
-                if not state.LastIdleReset then state.LastIdleReset = now end
-                if (now - state.LastIdleReset) > config.AutoIdleInterval then
-                    state.LastIdleReset = now
-                    -- Briefly reset to normal
-                    local baseSpeed = state.OrigWalk or 600
-                    CM.MaxWalkSpeed = baseSpeed
-                    CM.MaxCustomMovementSpeed = state.OrigRun or 600
-                    state.CurrentSpeed = baseSpeed
-                    print("[SpeedHack] Auto idle reset -> 600")
-                    return  -- Skip this tick
+            -- Combat/Jump bypass
+            if config.BypassEnabled then
+                if config.CombatSlowdown and (localPlayer.bIsWeaponFiring or localPlayer.bIsGunADS) then
+                    targetSpeed = targetSpeed * 0.8 -- কমায় না, শুধু একটু কমিয়ে ৮০% করে (সেফটির জন্য)
+                end
+                if config.JumpProtection and CM.MovementMode == EMovementMode.MOVE_Falling then
+                    targetSpeed = targetSpeed * 0.9 -- জাম্পের সময় ৯০% থাকে
                 end
             end
             
-            -- ═══ Calculate target speed ═══
-            local baseSpeed = state.OrigWalk or 600
-            local targetSpeed = CalculateSafeSpeed(baseSpeed, multiplier, isCombat, isJumping)
-            
-            -- ═══ Apply speed ═══
-            if state.LastMultiplier ~= multiplier or math.abs(state.CurrentSpeed - targetSpeed) > 10 then
+            -- যেকোনো পরিবর্তন হলেই সাথে সাথে অ্যাপ্লাই হবে
+            if state.LastMultiplier ~= multiplier or math.abs(state.CurrentSpeed - targetSpeed) > 5 then
                 state.LastMultiplier = multiplier
                 state.CurrentSpeed = targetSpeed
-                state.IsCombat = isCombat
-                state.IsJumping = isJumping
-                
-                -- Apply with server masking
-                local realSpeed = ApplyServerMasking(CM, targetSpeed)
-                
-                -- Crouch and Swim at reduced speed
-                CM.MaxWalkSpeedCrouched = realSpeed * 0.5
-                CM.MaxSwimSpeed = realSpeed * 0.5
-                
                 state.Applied = true
                 
-                print(string.format("[SpeedHack] %dx -> %.0f (Combat:%s Jump:%s)",
-                    multiplier, targetSpeed,
-                    tostring(isCombat), tostring(isJumping)))
+                -- Apply to character
+                CM.MaxWalkSpeed = targetSpeed
+                CM.MaxCustomMovementSpeed = targetSpeed
+                CM.MaxWalkSpeedCrouched = targetSpeed * 0.5
+                CM.MaxSwimSpeed = targetSpeed * 0.5
+                
+                print(string.format("[SpeedHack] Fast Applied -> %dx (Speed: %.0f)", multiplier, targetSpeed))
             end
         else
-            -- ═══ RESTORE original ═══
+            -- Restore when OFF
             if state.Applied then
                 CM.MaxWalkSpeed = state.OrigWalk or 600
                 CM.MaxCustomMovementSpeed = state.OrigRun or 600
@@ -264,14 +137,14 @@ local function ApplySpeedHack(localPlayer)
                 state.LastMultiplier = 0
                 state.CurrentSpeed = state.OrigWalk or 600
                 state.Applied = false
-                print("[SpeedHack] Restored to original")
+                print("[SpeedHack] Restored to normal")
             end
         end
     end)
 end
 
 -- ═══════════════════════════════════════════════════════════════════════════
--- SPEED HACK LOOP (0.2s tick)
+-- SPEED HACK LOOP (0.1s tick for instant feel)
 -- ═══════════════════════════════════════════════════════════════════════════
 local function SpeedHackTick()
     pcall(function()
@@ -286,7 +159,7 @@ local function SpeedHackTick()
     
     local okTicker, ticker = pcall(require, "common.time_ticker")
     if okTicker and ticker and ticker.AddTimerOnce then
-        ticker.AddTimerOnce(0.2, SpeedHackTick)
+        ticker.AddTimerOnce(0.1, SpeedHackTick) -- 0.1s (আগে ছিল 0.2s)
     end
 end
 
@@ -298,7 +171,7 @@ pcall(function()
 end)
 
 -- ═══════════════════════════════════════════════════════════════════════════
--- SPEED HACK MENU (WITH BYPASS OPTIONS)
+-- SPEED HACK MENU (FIXED SLIDER MAX VALUES)
 -- ═══════════════════════════════════════════════════════════════════════════
 function _G.InitSpeedHackMenu()
     if _G.SpeedHackMenuInitialized then return end
@@ -333,24 +206,22 @@ function _G.InitSpeedHackMenu()
               GetFunc = function() return _G.SpeedHackConfig.Enabled end, 
               SetFunc = function(c,v) 
                   _G.SpeedHackConfig.Enabled = v 
-                  if v == false then
-                      _G.SpeedHackState.LastMultiplier = 0
-                  end
+                  if v == false then _G.SpeedHackState.LastMultiplier = 0 end
                   return true 
               end },
             
-            -- Multiplier slider
+            -- Multiplier Slider (1 to 5)
             { Key = "ModMenu_Speed_Multiplier", UI = AliasMap.Slider, 
-              Text = "   MULTIPLIER (1=Normal, 5=5x)", 
+              Text = "   MULTIPLIER (1=Normal, 5=Max 5x)", 
               ExpandHandle = "ModMenu_Speed_Ex", 
               MinValue = 1, MaxValue = 5, min = 1, max = 5,
-              GetFunc = function() return _G.SpeedHackConfig.Multiplier or 5 end, 
+              GetFunc = function() return math.floor(_G.SpeedHackConfig.Multiplier or 5) end, 
               SetFunc = function(c,v) 
                   local val = math.floor(v + 0.5)
                   if val < 1 then val = 1 end
                   if val > 5 then val = 5 end
                   _G.SpeedHackConfig.Multiplier = val
-                  _G.SpeedHackState.LastMultiplier = 0
+                  _G.SpeedHackState.LastMultiplier = 0 -- Force instant update
                   return true 
               end },
             
@@ -358,62 +229,17 @@ function _G.InitSpeedHackMenu()
             { Key = "ModMenu_Bypass_Ex", UI = AliasMap.TitleSwitcher, 
               Text = "🛡️ ANTI-BAN BYPASS", ExpandIndex = 0, 
               GetFunc = function() return _G.SpeedHackConfig.BypassEnabled end, 
-              SetFunc = function(c,v) 
-                  _G.SpeedHackConfig.BypassEnabled = v 
-                  return true 
-              end },
+              SetFunc = function(c,v) _G.SpeedHackConfig.BypassEnabled = v return true end },
             
-            -- Combat slowdown
             { Key = "ModMenu_Bypass_Combat", UI = AliasMap.Switcher, 
-              Text = "   Combat Slowdown (Fire/Aim)", 
-              ExpandHandle = "ModMenu_Bypass_Ex",
+              Text = "   Combat Slowdown (Fire/Aim)", ExpandHandle = "ModMenu_Bypass_Ex",
               GetFunc = function() return _G.SpeedHackConfig.CombatSlowdown end, 
-              SetFunc = function(c,v) 
-                  _G.SpeedHackConfig.CombatSlowdown = v 
-                  return true 
-              end },
+              SetFunc = function(c,v) _G.SpeedHackConfig.CombatSlowdown = v return true end },
             
-            -- Jump protection
             { Key = "ModMenu_Bypass_Jump", UI = AliasMap.Switcher, 
-              Text = "   Jump Protection", 
-              ExpandHandle = "ModMenu_Bypass_Ex",
+              Text = "   Jump Protection", ExpandHandle = "ModMenu_Bypass_Ex",
               GetFunc = function() return _G.SpeedHackConfig.JumpProtection end, 
-              SetFunc = function(c,v) 
-                  _G.SpeedHackConfig.JumpProtection = v 
-                  return true 
-              end },
-            
-            -- Auto idle reset
-            { Key = "ModMenu_Bypass_Idle", UI = AliasMap.Switcher, 
-              Text = "   Auto Idle Reset (8s)", 
-              ExpandHandle = "ModMenu_Bypass_Ex",
-              GetFunc = function() return _G.SpeedHackConfig.AutoIdleReset end, 
-              SetFunc = function(c,v) 
-                  _G.SpeedHackConfig.AutoIdleReset = v 
-                  return true 
-              end },
-            
-            -- Ramp up speed
-            { Key = "ModMenu_Bypass_Ramp", UI = AliasMap.Slider, 
-              Text = "   Ramp Speed (50-500/sec)", 
-              ExpandHandle = "ModMenu_Bypass_Ex",
-              MinValue = 50, MaxValue = 500, min = 50, max = 500,
-              GetFunc = function() return _G.SpeedHackConfig.RampUpSpeed or 200 end, 
-              SetFunc = function(c,v) 
-                  _G.SpeedHackConfig.RampUpSpeed = v
-                  return true 
-              end },
-            
-            -- Server max speed
-            { Key = "ModMenu_Bypass_ServerMax", UI = AliasMap.Slider, 
-              Text = "   Server Max (600-1200)", 
-              ExpandHandle = "ModMenu_Bypass_Ex",
-              MinValue = 600, MaxValue = 1200, min = 600, max = 1200,
-              GetFunc = function() return _G.SpeedHackConfig.ServerMaxSpeed or 900 end, 
-              SetFunc = function(c,v) 
-                  _G.SpeedHackConfig.ServerMaxSpeed = v
-                  return true 
-              end },
+              SetFunc = function(c,v) _G.SpeedHackConfig.JumpProtection = v return true end },
         }
         
         SettingPageDefine.SpeedHackMenu = {
@@ -460,9 +286,7 @@ end
 pcall(function()
     local ticker = require("common.time_ticker")
     if ticker and ticker.AddTimerOnce then
-        ticker.AddTimerOnce(2.0, function()
-            pcall(_G.InitSpeedHackMenu)
-        end)
+        ticker.AddTimerOnce(2.0, function() pcall(_G.InitSpeedHackMenu) end)
     end
 end)
 
@@ -477,7 +301,6 @@ function BRPlayerCharacterBase:_PostConstruct()
   BRPlayerCharacterBase.__super._PostConstruct(self)
   self:InitAddSpecialMoveInfo()
   self.bCanNearDeathGiveup = true
-  print(bWriteLog and "BRPlayerCharacterBase:_PostConstruct bCanNearDeathGiveup true")
 end
 
 function BRPlayerCharacterBase:ReceiveBeginPlay()
@@ -486,7 +309,6 @@ function BRPlayerCharacterBase:ReceiveBeginPlay()
   if self:HasAuthority() and self:CheckAddCheckFallingDistanceComponent() then
     local CheckFallingDistanceComponent_C = import("CheckFallingDistanceComponent")
     if slua.isValid(CheckFallingDistanceComponent_C) and not slua.isValid(self:GetComponentByClass(CheckFallingDistanceComponent_C)) then
-      print(bWriteLog and "BRPlayerCharacterBase:ReceiveBeginPlay Add CheckFallingDistanceComponent")
       Game:AddComponent(CheckFallingDistanceComponent_C, self, "CheckFallingDistanceComponent")
     end
   end
@@ -501,7 +323,6 @@ function BRPlayerCharacterBase:ReceiveBeginPlay()
     }, self.CharacterAttrChangeEvent, self)
   end
   if Client then
-    printf(bWriteLog and "BRPlayerCharacterBase:ReceiveBeginPlay, PlayerKey:%u ", self.PlayerKey)
     GameplayData.AddCharacter(self.Object)
   else
     self:AddCommonEventWithConditions(EVENTTYPE_INGAME_NORMAL, EVENTID_GAME_MODE_STATE_CHANGE, {
@@ -512,9 +333,7 @@ end
 
 function BRPlayerCharacterBase:CharacterAttrChangeEvent(uPawn, AttrName, AttrVal)
   BRPlayerCharacterBase.__super.CharacterAttrChangeEvent(self, uPawn, AttrName, AttrVal)
-  if self.Object ~= uPawn then
-    return
-  end
+  if self.Object ~= uPawn then return end
   if self.Role == ENetRole.ROLE_AutonomousProxy and AttrName == "bCanSelfRescue" then
     local uPlayerController = self:GetPlayerControllerSafety()
     if slua.isValid(uPlayerController) then
@@ -524,7 +343,6 @@ function BRPlayerCharacterBase:CharacterAttrChangeEvent(uPawn, AttrName, AttrVal
 end
 
 function BRPlayerCharacterBase:OnPawnStateChange(PawnState)
-  print("BRPlayerCharacterBase:OnPawnStateChange:", PawnState)
   if PawnState == EPawnState.SwitchPP then
     local uPlayerController = self:GetPlayerControllerSafety()
     if slua.isValid(uPlayerController) then
@@ -534,7 +352,6 @@ function BRPlayerCharacterBase:OnPawnStateChange(PawnState)
 end
 
 function BRPlayerCharacterBase:HandleFinishedState()
-  print(bWriteLog and "BRPlayerCharacterBase:HandleFinishedState", self.STCharacterMovement)
   if slua.isValid(self.STCharacterMovement) and self.STCharacterMovement.SetDynamicSimpleQueryConfigDisable then
     local EDynamicSimpleQueryConfigDisableMask = import("EDynamicSimpleQueryConfigDisableMask")
     self.STCharacterMovement:SetDynamicSimpleQueryConfigDisable(EDynamicSimpleQueryConfigDisableMask.Bit0, true)
@@ -547,7 +364,6 @@ function BRPlayerCharacterBase:CheckAddCheckFallingDistanceComponent()
     local GameModeID = tonumber(CGameState.GameModeID)
     local bModeTypeSatisfy = GameModeType == EGameModeType.ETypicalGameMode or GameModeType == EGameModeType.EFourInOneGameMode or GameModeType == EGameModeType.EHeavyWeaponGameMode
     local bModeIDSatisfy = not MatchModeIds[GameModeID]
-    print(bWriteLog and "BRPlayerCharacterBase:CheckAddCheckFallingDistanceComponent:", GameModeType, GameModeID, bModeTypeSatisfy, bModeIDSatisfy)
     return bModeTypeSatisfy and bModeIDSatisfy
   end
   return false
@@ -575,10 +391,7 @@ function BRPlayerCharacterBase:LuaHandleParachuteStateChanged(LastParachuteState
 end
 
 function BRPlayerCharacterBase:OnLanded()
-  printf("BRPlayerCharacterBase:OnLanded PlayerKey:%d", self.PlayerKey)
-  if self.HandleOnLanded then
-    self:HandleOnLanded(-1)
-  end
+  if self.HandleOnLanded then self:HandleOnLanded(-1) end
   if not Client then
     local uCurrentPlayerControl = self:GetPlayerControllerSafety()
     if slua.isValid(uCurrentPlayerControl) and uCurrentPlayerControl.CheckParachuteOpenFeature then
@@ -594,9 +407,7 @@ end
 
 function BRPlayerCharacterBase:ReceiveEndPlay(EndPlayReason)
   BRPlayerCharacterBase.__super.ReceiveEndPlay(self, EndPlayReason)
-  if Client then
-    GameplayData.RemoveCharacter(self.Object)
-  end
+  if Client then GameplayData.RemoveCharacter(self.Object) end
 end
 
 function BRPlayerCharacterBase:IsWarGameMode()
@@ -608,26 +419,15 @@ function BRPlayerCharacterBase:IsWarGameMode()
   end
 end
 
-function BRPlayerCharacterBase:BPOnRecycled()
-  print(bWriteLog and string.format("%s BPOnRecycled()", Game:GetPlainName(self.Object)))
-end
-
-function BRPlayerCharacterBase:BPOnRespawned()
-  print(bWriteLog and string.format("%s BPOnRespawned()", Game:GetPlainName(self.Object)))
-end
+function BRPlayerCharacterBase:BPOnRecycled() end
+function BRPlayerCharacterBase:BPOnRespawned() end
 
 function BRPlayerCharacterBase:ReceiveOnRecycle()
-  print(bWriteLog and string.format("%s IReusable:ReceiveOnRecycle()", Game:GetPlainName(self.Object)))
-  if Client then
-    GameplayData.RemoveCharacter(self.Object)
-  end
+  if Client then GameplayData.RemoveCharacter(self.Object) end
 end
 
 function BRPlayerCharacterBase:ReceiveOnSpawn()
-  print(bWriteLog and string.format("%s IReusable:ReceiveOnSpawn()", Game:GetPlainName(self.Object)))
-  if Client then
-    GameplayData.AddCharacter(self.Object)
-  end
+  if Client then GameplayData.AddCharacter(self.Object) end
 end
 
 function BRPlayerCharacterBase:HandleOnMovementModeChangedNew()
@@ -639,8 +439,7 @@ function BRPlayerCharacterBase:HandleOnMovementModeChangedNew()
   end
 end
 
-function BRPlayerCharacterBase:BPOnMissPlayerDamageRecord()
-end
+function BRPlayerCharacterBase:BPOnMissPlayerDamageRecord() end
 
 function BRPlayerCharacterBase:ParachuteJump()
   local uPlayerController = self:GetControllerSafety()
@@ -659,37 +458,27 @@ end
 
 function BRPlayerCharacterBase:CheckForbidFlaregun()
   local uPlayerState = self:GetPlayerStateSafety()
-  if not slua.isValid(uPlayerState) then
-    return false
-  end
+  if not slua.isValid(uPlayerState) then return false end
   if uPlayerState.CanUseFlaregun == false and self:IsLocallyControlled() then
     local uPlayerController = self:GetPlayerControllerSafety()
-    if slua.isValid(uPlayerController) then
-      uPlayerController:DisplayGameTipWithMsgID(48532)
-    end
+    if slua.isValid(uPlayerController) then uPlayerController:DisplayGameTipWithMsgID(48532) end
   end
   return not uPlayerState.CanUseFlaregun
 end
 
-function BRPlayerCharacterBase:ServerRPC_NearDeathGiveupRescue()
-  self:HandleNearDeathGiveupRescue()
-end
+function BRPlayerCharacterBase:ServerRPC_NearDeathGiveupRescue() self:HandleNearDeathGiveupRescue() end
 
 function BRPlayerCharacterBase:HandleNearDeathGiveupRescue()
   local uNearDeathComp = self.NearDeatchComponent
   if self:IsNearDeath() and slua.isValid(uNearDeathComp) and self.bCanNearDeathGiveup == true then
     local uPlayerState = self:GetPlayerStateSafety()
-    if slua.isValid(uPlayerState) then
-      uPlayerState:AddGeneralCount(1613, 1, false)
-    end
+    if slua.isValid(uPlayerState) then uPlayerState:AddGeneralCount(1613, 1, false) end
     uNearDeathComp:TriggerGotoDieExplictly(self.Object)
   end
 end
 
 function BRPlayerCharacterBase:RPC_Server_GmPlayAction(actionId)
-  if USTExtraBlueprintFunctionLibrary.IsDevelopment() then
-    self:MulticastRPC_GmPlayAction(actionId)
-  end
+  if USTExtraBlueprintFunctionLibrary.IsDevelopment() then self:MulticastRPC_GmPlayAction(actionId) end
 end
 
 function BRPlayerCharacterBase:MulticastRPC_GmPlayAction(actionId)
@@ -705,9 +494,7 @@ function BRPlayerCharacterBase:MulticastRPC_GmPlayAction(actionId)
   uPlayEmoteComp:OnLoadEmoteAssetBegin(handle, actionId, assetsArray, "")
   local tb = FuncUtil.LuaArrayToTable(assetsArray)
   local asset_util = require("common.asset_util")
-  local loadLater = function()
-    uPlayEmoteComp:OnLoadEmoteAssetEnd(handle, actionId, 0)
-  end
+  local loadLater = function() uPlayEmoteComp:OnLoadEmoteAssetEnd(handle, actionId, 0) end
   asset_util.GetAssetsArrayAsyncParallel(tb, loadLater)
 end
 
@@ -719,16 +506,12 @@ end
 
 function BRPlayerCharacterBase:OnPlayerEnterCarryBoxState()
   self.Super:OnPlayerEnterCarryBoxState()
-  if self.CarryDeadBoxFeature then
-    self.CarryDeadBoxFeature:OnPlayerEnterCarryBoxState()
-  end
+  if self.CarryDeadBoxFeature then self.CarryDeadBoxFeature:OnPlayerEnterCarryBoxState() end
 end
 
 function BRPlayerCharacterBase:OnPlayerLeaveCarryBoxState(bInIsInterrupt)
   self.Super:OnPlayerLeaveCarryBoxState(bInIsInterrupt)
-  if self.CarryDeadBoxFeature then
-    self.CarryDeadBoxFeature:OnPlayerLeaveCarryBoxState(bInIsInterrupt)
-  end
+  if self.CarryDeadBoxFeature then self.CarryDeadBoxFeature:OnPlayerLeaveCarryBoxState(bInIsInterrupt) end
 end
 
 function BRPlayerCharacterBase:ServerRPC_CarryDeadBox(uInDeadBox)
@@ -737,22 +520,12 @@ function BRPlayerCharacterBase:ServerRPC_CarryDeadBox(uInDeadBox)
   end
 end
 
-function BRPlayerCharacterBase:SetAreaID(AreaID)
-  self:SetAttrValue("AreaID", AreaID, -1)
-end
-
-function BRPlayerCharacterBase:GetAreaID()
-  return math.floor(self:GetAttrValue("AreaID") + 0.5)
-end
-
-function BRPlayerCharacterBase:CannotChangeIntoPetSpectator()
-  return self.bCannotChangeIntoPetSpectator
-end
+function BRPlayerCharacterBase:SetAreaID(AreaID) self:SetAttrValue("AreaID", AreaID, -1) end
+function BRPlayerCharacterBase:GetAreaID() return math.floor(self:GetAttrValue("AreaID") + 0.5) end
+function BRPlayerCharacterBase:CannotChangeIntoPetSpectator() return self.bCannotChangeIntoPetSpectator end
 
 function BRPlayerCharacterBase:DoModChangeToBT()
-  if self:HasState(EPawnState.SpecialSuit) then
-    self:TriggerEntrySkillWithID(4301101, true)
-  end
+  if self:HasState(EPawnState.SpecialSuit) then self:TriggerEntrySkillWithID(4301101, true) end
 end
 
 function BRPlayerCharacterBase:SwitchCameraToParachuteOpening()
@@ -795,16 +568,14 @@ function BRPlayerCharacterBase:SwitchWeaponCheck(Slot, IgnoreState)
     local SpiderSwingObj = self.STCharacterMovement:GetSpecialMoveObjBySpecialMoveType(ESpecialMovementType.SPECIAL_MOVE_SpiderSwing)
     if slua.isValid(SpiderSwingObj) then
       local nCurState = SpiderSwingObj:GetCurMoveState()
-      if nCurState == ESpiderSwingMoveState.Launching or nCurState == ESpiderSwingMoveState.Swinging then
-        return false
-      end
+      if nCurState == ESpiderSwingMoveState.Launching or nCurState == ESpiderSwingMoveState.Swinging then return false end
     end
   end
   return self.Super:SwitchWeaponCheck(Slot, IgnoreState)
 end
 
 -- ═══════════════════════════════════════════════════════════════════════════
--- CLASS REGISTRATION (MUST KEEP)
+-- CLASS REGISTRATION
 -- ═══════════════════════════════════════════════════════════════════════════
 local class = require("class")
 local CCharacterBase = require("GameLua.GameCore.Framework.CharacterBase")
