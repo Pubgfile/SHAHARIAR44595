@@ -1,8 +1,7 @@
 -- ============================================================
---  FAST MOVEMENT (2X BOOST) BY SRC HUB @XTHRLEN
+--  FAST MOVEMENT (FORWARD ×3, HIGH ×3) BY @XTHRLEN
 -- ============================================================
 
--- BRPlayerCharacterBase table (REQUIRED for class register)
 local BRPlayerCharacterBase = {
   ServerRPC = {}, ClientRPC = {}, MulticastRPC = {}, LuaEventContainer = {}
 }
@@ -21,8 +20,8 @@ local CFG = {
     RampTime      = 0.5,
     VelocityBoost = 1.0,
     DEBUG         = true,
-    ForwardBoost  = 2.0,   -- 🎯 FORWARD SPEED × 2
-    HighBoost     = 2.0,   -- 🎯 HIGH SPEED × 2
+    ForwardBoost  = 3.0,   -- 🎯 FORWARD SPEED × 3
+    HighBoost     = 3.0,   -- 🎯 HIGH SPEED × 3
 }
 
 _G.XThrlen_Config  = CFG
@@ -56,7 +55,7 @@ end
 
 pcall(function()
     local f = io.open(LOG_PATHS[1], 'w')
-    if f then f:write('=== Fast Movement 2X ===\n') f:close() end
+    if f then f:write('=== Fast Movement 3X ===\n') f:close() end
     LOG_PATH = LOG_PATHS[1]
 end)
 
@@ -99,29 +98,25 @@ local function SaveOriginals(ch, cm)
     pcall(function() o.Crouch     = tonumber(ch.MaxCrouchSpeed) or 300 end)
     pcall(function() o.Prone      = tonumber(ch.MaxProneSpeed) or 100 end)
     pcall(function() o.SprintCr   = tonumber(ch.MaxSprintCrouchSpeed) or 400 end)
-    Log(string.format('orig: rate=%.2f scale=%.2f max=%.0f sprint=%.0f high=%.0f',
-        o.SpeedRate, o.Scale, o.Max, o.Sprint, o.High))
 end
 
--- 🎯 ENFORCE WITH DOUBLE FORWARD/HIGH SPEED
+-- 🎯 ENFORCE: Forward ×3, High ×3
 local function Enforce(ch, cm, m)
-    local mFwd  = m * (CFG.ForwardBoost or 2.0)   -- forward ×2
-    local mHigh = m * (CFG.HighBoost or 2.0)      -- high ×2
+    local mFwd  = m * (CFG.ForwardBoost or 3.0)
+    local mHigh = m * (CFG.HighBoost or 3.0)
     
-    -- Base speed (unchanged, multiplied by m)
     pcall(function() cm.SpeedRate          = S.o.SpeedRate * m end)
     pcall(function() ch.SpeedValue         = S.o.Value * m end)
     pcall(function() cm.DefaultMaxWalkSpeed = S.o.Def * m end)
     
-    -- 🎯 FORWARD SPEED × 2
+    -- FORWARD ×3
     pcall(function() ch.SpeedScale         = S.o.Scale * mFwd end)
     pcall(function() cm.MaxWalkSpeed        = S.o.Max * mFwd end)
     
-    -- 🎯 HIGH SPEED × 2
+    -- HIGH ×3
     pcall(function() ch.MaxSprintSpeed      = S.o.Sprint * mHigh end)
     pcall(function() ch.HighWalkSpeed       = S.o.High * mHigh end)
     
-    -- Others (unchanged)
     pcall(function() ch.MaxCrouchSpeed      = S.o.Crouch * m end)
     pcall(function() ch.MaxProneSpeed       = S.o.Prone * m end)
     pcall(function() ch.MaxSprintCrouchSpeed= S.o.SprintCr * m end)
@@ -132,7 +127,7 @@ function _G.XThrlen_Speed(mult)
     if mult > CFG.MaxSafe then mult = CFG.MaxSafe end
     CFG.Multiplier = mult
     PLog(string.format('[SRCHUB] SPEED x%.1f (Forward x%.1f, High x%.1f)',
-        mult, mult * (CFG.ForwardBoost or 2), mult * (CFG.HighBoost or 2)))
+        mult, mult * (CFG.ForwardBoost or 3), mult * (CFG.HighBoost or 3)))
 end
 
 local function TickInner(dt)
@@ -167,8 +162,7 @@ local function TickInner(dt)
         pcall(function()
             local v = ch:GetVelocity()
             local spd = math.sqrt(v.X * v.X + v.Y * v.Y)
-            Log(string.format('[hb] rate=%.2f walk=%.0f high=%.0f vel=%.0f',
-                tonumber(cm.SpeedRate) or -1,
+            Log(string.format('[hb] walk=%.0f high=%.0f vel=%.0f',
                 tonumber(cm.MaxWalkSpeed) or -1,
                 tonumber(ch.HighWalkSpeed) or -1,
                 spd))
@@ -185,17 +179,6 @@ local function TickInner(dt)
     end
 
     Enforce(ch, cm, S.curMult)
-
-    if CFG.VelocityBoost > 1.01 then
-        pcall(function()
-            local v = cm.Velocity or ch:GetVelocity()
-            if not v then return end
-            local hs = math.sqrt(v.X * v.X + v.Y * v.Y)
-            if hs < 80 then return end
-            cm.Velocity = FVector(v.X * CFG.VelocityBoost,
-                v.Y * CFG.VelocityBoost, v.Z)
-        end)
-    end
 end
 
 local function Tick(dt)
@@ -205,7 +188,7 @@ end
 
 if TXtime_ticker then
     _G.XThrlen_TimerIndex = TXtime_ticker.AddTimerLoop(0, Tick, -1, 0)
-    PLog('[SRCHUB] Fast Movement 2X loaded - Forward x2, High x2!')
+    PLog('[SRCHUB] Fast Movement 3X loaded - Forward ×3, High ×3!')
 else
     PLog('[SRCHUB] ERROR: time_ticker Not Found')
 end
@@ -232,15 +215,41 @@ function _G.XThrlen_Unload()
 end
 
 -- ============================================================
--- MENU
+-- MENU (with debug print to find failure)
 -- ============================================================
 local function XThrlen_RegisterMenu()
+    -- Debug: check each dependency
+    local ok1, SettingPageDefine = pcall(require, "client.logic.NewSetting.SettingPageDefine")
+    PLog("[SRCHUB] SettingPageDefine: " .. tostring(ok1) .. " / " .. tostring(SettingPageDefine ~= nil))
+    
+    local ok2, SettingCatalog = pcall(require, "client.logic.NewSetting.SettingCatalog")
+    PLog("[SRCHUB] SettingCatalog: " .. tostring(ok2) .. " / " .. tostring(SettingCatalog ~= nil))
+    
+    local ok3, AliasMap = pcall(require, "client.slua.umg.NewSetting.Item.AliasMap")
+    PLog("[SRCHUB] AliasMap: " .. tostring(ok3) .. " / " .. tostring(AliasMap ~= nil))
+    
+    if not (ok1 and ok2 and ok3 and SettingPageDefine and SettingCatalog and AliasMap) then
+        PLog("[SRCHUB] ❌ Menu framework missing - use console")
+        PLog("  _G.XThrlen_Speed(10)")
+        PLog("  _G.XThrlen_Config.ForwardBoost = 3")
+        PLog("  _G.XThrlen_Config.HighBoost = 3")
+        return
+    end
+    
+    -- Check Switcher/Slider exists
+    PLog("[SRCHUB] AliasMap.Switcher: " .. tostring(AliasMap.Switcher))
+    PLog("[SRCHUB] AliasMap.Slider: " .. tostring(AliasMap.Slider))
+    
+    if not AliasMap.Switcher or not AliasMap.Slider then
+        PLog("[SRCHUB] ❌ Switcher/Slider missing")
+        return
+    end
+    
     local ok = pcall(function()
-        local SettingPageDefine = require("client.logic.NewSetting.SettingPageDefine")
-        local SettingCatalog    = require("client.logic.NewSetting.SettingCatalog")
-        local AliasMap          = require("client.slua.umg.NewSetting.Item.AliasMap")
-
-        if SettingPageDefine.XThrlenFastMenu then return end
+        if SettingPageDefine.XThrlenFastMenu then
+            PLog("[SRCHUB] Menu already registered")
+            return
+        end
 
         local items = {}
 
@@ -272,10 +281,10 @@ local function XThrlen_RegisterMenu()
         table.insert(items, {
             Key      = "XThrlen_Fast_ForwardBoost",
             UI       = AliasMap.Slider,
-            Text     = "FORWARD SPEED BOOST (1-5x)",
+            Text     = "FORWARD BOOST (1-5x)",
             MinValue = 1, MaxValue = 5,
             min      = 1, max      = 5,
-            GetFunc  = function() return _G.XThrlen_Config.ForwardBoost or 2 end,
+            GetFunc  = function() return _G.XThrlen_Config.ForwardBoost or 3 end,
             SetFunc  = function(_, v)
                 _G.XThrlen_Config.ForwardBoost = v
                 PLog("[SRCHUB] ForwardBoost: " .. tostring(v))
@@ -286,10 +295,10 @@ local function XThrlen_RegisterMenu()
         table.insert(items, {
             Key      = "XThrlen_Fast_HighBoost",
             UI       = AliasMap.Slider,
-            Text     = "HIGH SPEED BOOST (1-5x)",
+            Text     = "HIGH BOOST (1-5x)",
             MinValue = 1, MaxValue = 5,
             min      = 1, max      = 5,
-            GetFunc  = function() return _G.XThrlen_Config.HighBoost or 2 end,
+            GetFunc  = function() return _G.XThrlen_Config.HighBoost or 3 end,
             SetFunc  = function(_, v)
                 _G.XThrlen_Config.HighBoost = v
                 PLog("[SRCHUB] HighBoost: " .. tostring(v))
@@ -297,23 +306,9 @@ local function XThrlen_RegisterMenu()
             end,
         })
 
-        table.insert(items, {
-            Key      = "XThrlen_Fast_Ramp",
-            UI       = AliasMap.Slider,
-            Text     = "RAMP TIME (0.1-2.0s)",
-            MinValue = 0.1, MaxValue = 2.0,
-            min      = 0.1, max      = 2.0,
-            GetFunc  = function() return _G.XThrlen_Config.RampTime or 0.5 end,
-            SetFunc  = function(_, v)
-                _G.XThrlen_Config.RampTime = v
-                PLog("[SRCHUB] RampTime: " .. tostring(v))
-                return true
-            end,
-        })
-
         SettingPageDefine.XThrlenFastMenu = {
             Key   = "XThrlenFastMenu",
-            Text  = "FAST MOVEMENT 2X",
+            Text  = "FAST MOVEMENT 3X",
             UIKey = "Setting_Page_Privacy",
             Category = {
                 {
@@ -325,11 +320,11 @@ local function XThrlen_RegisterMenu()
         }
 
         table.insert(SettingCatalog, #SettingCatalog + 1, SettingPageDefine.XThrlenFastMenu)
-        PLog("[SRCHUB] Menu registered OK")
+        PLog("[SRCHUB] ✅ Menu registered OK")
     end)
 
     if not ok then
-        PLog("[SRCHUB] Menu unavailable - use console commands")
+        PLog("[SRCHUB] ❌ Menu insert failed")
     end
 end
 
