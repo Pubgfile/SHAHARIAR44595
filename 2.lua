@@ -1,5 +1,5 @@
 -- ═══════════════════════════════════════════════════════════════════════════
--- BRPlayerCharacterBase.lua - FINAL WORKING SPEED HACK (VELOCITY FORCE)
+-- BRPlayerCharacterBase.lua - FINAL FIXED FORWARD SPEED HACK
 -- ═══════════════════════════════════════════════════════════════════════════
 
 local BRPlayerCharacterBase = {
@@ -41,7 +41,7 @@ _G.SpeedHackState = _G.SpeedHackState or {
 }
 
 -- ═══════════════════════════════════════════════════════════════════════════
--- VELOCITY FORCE SPEED LOGIC
+-- REAL FORWARD SPEED LOGIC (ENGINE FORCE)
 -- ═══════════════════════════════════════════════════════════════════════════
 local function ApplySpeedHack(localPlayer)
     if not slua.isValid(localPlayer) then return end
@@ -63,30 +63,28 @@ local function ApplySpeedHack(localPlayer)
             local mult = tonumber(config.SpeedMultiplier) or 5
             if mult < 1 then mult = 1 end
             
-            local targetSpeed = (state.OrigWalk or 600) * mult
-            local targetAccel = (state.OrigAccel or 2048) * mult
+            -- গেমের ম্যাক্সিমাম স্পিড এবং অ্যাক্সিলারেশন বাড়ানো
+            CM.MaxWalkSpeed = (state.OrigWalk or 600) * mult
+            CM.MaxAcceleration = (state.OrigAccel or 2048) * mult
             
-            -- ১. স্পিড এবং অ্যাক্সিলারেশন ফোর্স করা
-            CM.MaxWalkSpeed = targetSpeed
-            CM.MaxAcceleration = targetAccel
-            
-            -- ২. Velocity Force (সরাসরি গতি বাড়ানো)
-            local vel = CM.Velocity
-            if vel and (vel.X ~= 0 or vel.Y ~= 0) then
-                local currentSpeed = math.sqrt(vel.X^2 + vel.Y^2)
-                if currentSpeed > 10 then -- যদি ক্যারেক্টার মুভ করে
-                    local dirX = vel.X / currentSpeed
-                    local dirY = vel.Y / currentSpeed
+            -- সামনের দিকে স্পিড ফোর্স করার জন্য বর্তমান ভেলোসিটি চেক
+            local currentVel = CM.Velocity
+            if currentVel then
+                local speed2D = math.sqrt(currentVel.X^2 + currentVel.Y^2)
+                -- যদি ক্যারেক্টার মুভ করে (সামনে বা পেছনে)
+                if speed2D > 10 then
+                    local dirX = currentVel.X / speed2D
+                    local dirY = currentVel.Y / speed2D
                     
-                    -- গেমের নরমাল স্পিডের সাথে মাল্টিপ্লায়ার গুণ করা
+                    -- নতুন স্পিড ক্যালকুলেশন
                     local newSpeed = (state.OrigWalk or 600) * mult
                     
-                    -- নতুন ভেলোসিটি সেট করা
-                    CM.Velocity = FVector(dirX * newSpeed, dirY * newSpeed, vel.Z)
+                    -- ইঞ্জিনের ভেলোসিটি সরাসরি সেট না করে সঠিক উপায়ে প্রয়োগ
+                    CM.Velocity = FVector(dirX * newSpeed, dirY * newSpeed, currentVel.Z)
                 end
             end
         else
-            -- টগল অফ হলে রিসেট
+            -- টগল অফ হলে আগের নরমাল স্পিডে ফিরে যাবে
             CM.MaxWalkSpeed = state.OrigWalk or 600
             CM.MaxAcceleration = state.OrigAccel or 2048
         end
@@ -94,7 +92,7 @@ local function ApplySpeedHack(localPlayer)
 end
 
 -- ═══════════════════════════════════════════════════════════════════════════
--- FAST LOOP (0.01s tick)
+-- FAST LOOP (0.01s tick for instant force)
 -- ═══════════════════════════════════════════════════════════════════════════
 local function SpeedHackTick()
     pcall(function()
@@ -109,7 +107,7 @@ local function SpeedHackTick()
     
     local okTicker, ticker = pcall(require, "common.time_ticker")
     if okTicker and ticker and ticker.AddTimerOnce then
-        ticker.AddTimerOnce(0.01, SpeedHackTick)
+        ticker.AddTimerOnce(0.01, SpeedHackTick) -- ০.০১ সেকেন্ড পর পর ফোর্স
     end
 end
 
@@ -121,7 +119,7 @@ pcall(function()
 end)
 
 -- ═══════════════════════════════════════════════════════════════════════════
--- MENU
+-- MENU (SLIDER 1 TO 100)
 -- ═══════════════════════════════════════════════════════════════════════════
 function _G.InitSpeedHackMenu()
     if _G.SpeedHackMenuInitialized then return end
@@ -147,11 +145,13 @@ function _G.InitSpeedHackMenu()
         local AliasMap = require("client.slua.umg.NewSetting.Item.AliasMap")
         
         local StackSpeedHack = {
+            -- Main Toggle
             { Key = "ModMenu_Speed_Ex", UI = AliasMap.TitleSwitcher, 
               Text = "⚡ SPEED HACK (1X - 100X)", ExpandIndex = 0, 
               GetFunc = function() return _G.SpeedHackConfig.Enabled end, 
               SetFunc = function(c,v) _G.SpeedHackConfig.Enabled = v return true end },
             
+            -- Slider
             { Key = "ModMenu_Speed_Value", UI = AliasMap.Slider, 
               Text = "   MULTIPLIER (1=Normal, 100=Max)", 
               ExpandHandle = "ModMenu_Speed_Ex", 
