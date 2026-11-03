@@ -1,5 +1,5 @@
 -- ═══════════════════════════════════════════════════════════════════════════
--- BRPlayerCharacterBase.lua - MAXIMUM OVERDRIVE SPEED HACK (USER REQUEST)
+-- BRPlayerCharacterBase.lua - ABSOLUTE MAXIMUM SPEED (HIGHEST ENGINE LIMIT)
 -- ═══════════════════════════════════════════════════════════════════════════
 
 local BRPlayerCharacterBase = {
@@ -28,20 +28,20 @@ local GamePlayTools = require("GameLua.Mod.BaseMod.Common.GamePlayTools")
 local MatchModeIds = require("GameLua.Mod.BaseMod.GamePlay.Config.MatchModeIdsConfig")
 
 -- ═══════════════════════════════════════════════════════════════════════════
--- CONFIG (MAXIMUM OVERDRIVE)
+-- CONFIG (HIGHEST ENGINE LIMIT)
 -- ═══════════════════════════════════════════════════════════════════════════
 local SPEED_CFG = {
     ENABLED          = true,      
-    TARGET_SPEED     = 20000,     -- ৬৫০০ থেকে বাড়িয়ে ২০০০০ করা হলো (১ সেকেন্ডে ২০০ মিটার)
-    MIN_MOVE_SPEED   = 1,         
-    REAPPLY_DELTA    = 10,        -- ডেল্টা ১০ করা হলো, যাতে গেম একটুও কমাতে না পারে
-    TICK_INTERVAL    = 0.001,     -- টিক ০.০০১ করা হলো (প্রতি মিলি সেকেন্ডে ফোর্স হবে)
+    TARGET_SPEED     = 65000,     -- ৬৫ হাজার স্পিড (গাড়িরও ১০ গুণ)
+    MIN_MOVE_SPEED   = 0.1,       
+    REAPPLY_DELTA    = 10,        
+    TICK_INTERVAL    = 0.001,     -- প্রতি ১ মিলি সেকেন্ডে ফোর্স
 }
 
 -- ═══════════════════════════════════════════════════════════════════════════
--- MAXIMUM SPEED LOGIC
+-- ABSOLUTE FORCE LOGIC
 -- ═══════════════════════════════════════════════════════════════════════════
-local function ForceCarSpeed(localPlayer, CM)
+local function ForceAbsoluteSpeed(localPlayer, CM)
     if not SPEED_CFG.ENABLED then return end
     if localPlayer.Role ~= ENetRole.ROLE_AutonomousProxy then return end
     if not slua.isValid(CM) then return end
@@ -54,38 +54,44 @@ local function ForceCarSpeed(localPlayer, CM)
         localPlayer._origCustomSpeed = CM.MaxCustomMovementSpeed or 600
     end
 
-    -- ম্যাক্সিমাম স্পিড ফোর্স (এখানে গেমের কোনো রেস্ট্রিকশন মানা হয়নি)
+    -- গেমের ইঞ্জিনের সর্বোচ্চ সীমা ফোর্স করা
     if math.abs(CM.MaxWalkSpeed - targetSpeed) > SPEED_CFG.REAPPLY_DELTA then
         CM.MaxWalkSpeed = targetSpeed
         CM.MaxCustomMovementSpeed = targetSpeed
-        CM.MaxAcceleration = 999999 -- অ্যাক্সিলারেশন সর্বোচ্চ করে দেওয়া হলো
+        CM.MaxAcceleration = 99999999
+        CM.BrakingDecelerationWalking = 99999999
+        CM.GroundFriction = 0 -- ঘর্ষণ শূন্য করে দেওয়া হলো, যাতে স্পিড না কমে
     end
 
-    -- ভেলোসিটি ফোর্স
+    -- ভেলোসিটি (Velocity) জোরপূর্বক ইনজেক্ট
     local vel = CM.Velocity
     if not vel then return end
 
     local vx, vy = vel.X, vel.Y
     local speed2D = math.sqrt(vx * vx + vy * vy)
 
-    if speed2D <= SPEED_CFG.MIN_MOVE_SPEED then return end
+    if speed2D > SPEED_CFG.MIN_MOVE_SPEED then
+        local scale = targetSpeed / speed2D
+        local nvx = vx * scale
+        local nvy = vy * scale
 
-    local scale = targetSpeed / speed2D
-    local nvx = vx * scale
-    local nvy = vy * scale
-
-    local ok = pcall(function()
-        vel.X = nvx
-        vel.Y = nvy
-        CM.Velocity = vel 
-    end)
-    if not ok then
-        print("[SpeedHack] Velocity write failed!")
+        pcall(function()
+            vel.X = nvx
+            vel.Y = nvy
+            CM.Velocity = vel 
+        end)
     end
+
+    -- গেমের ইন্টারনাল স্প্রিন্ট ব্লক বাইপাস
+    pcall(function()
+        if CM.bWantsToSprint ~= nil then CM.bWantsToSprint = true end
+        if CM.bIsSprinting ~= nil then CM.bIsSprinting = true end
+        if CM.bIsCrouching ~= nil then CM.bIsCrouching = false end
+    end)
 end
 
 -- ═══════════════════════════════════════════════════════════════════════════
--- SAFE TICK HELPER
+-- TICK HELPER
 -- ═══════════════════════════════════════════════════════════════════════════
 local function SafeTick()
     local pc = GameplayData.GetPlayerController()
@@ -95,15 +101,14 @@ local function SafeTick()
     local CM = lp.CharacterMovement
     if not slua.isValid(CM) then return end
     
-    local ok, err = pcall(ForceCarSpeed, lp, CM)
-    if not ok then print("[SpeedHack] Tick Error: " .. tostring(err)) end
+    local ok, err = pcall(ForceAbsoluteSpeed, lp, CM)
+    if not ok then print("[AbsoluteSpeed] Tick Error: " .. tostring(err)) end
 end
 
 -- ═══════════════════════════════════════════════════════════════════════════
--- TICK HOOK
+-- TICK HOOK INSTALL
 -- ═══════════════════════════════════════════════════════════════════════════
 local _hookInstalled = false
-
 local function InstallSpeedHook()
     if _hookInstalled then return end
     local success = false
@@ -118,7 +123,7 @@ local function InstallSpeedHook()
         end
     end)
     
-    if not ok then print("[SpeedHack] EnginePreTick Error: " .. tostring(err)) end
+    if not ok then print("[AbsoluteSpeed] EnginePreTick Error: " .. tostring(err)) end
     
     if not success then
         local ticker = require("common.time_ticker")
@@ -202,6 +207,7 @@ function BRPlayerCharacterBase:ReceiveEndPlay(EndPlayReason)
             if self._origCustomSpeed then
                 CM.MaxCustomMovementSpeed = self._origCustomSpeed
             end
+            CM.GroundFriction = 1 -- অরিজিনাল ঘর্ষণ ফিরিয়ে আনা
         end)
     end
 
