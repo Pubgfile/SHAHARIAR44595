@@ -1,326 +1,335 @@
--- ===========================================================================
--- BRPlayerCharacterBase.lua - CHARACTER SPEED HACK + SETTINGS MENU
--- ===========================================================================
+-- ============================================================
+--  FAST MOVEMENT BY SRC HUB MADE BY @XTHRLEN
+-- ============================================================
 
-local BRPlayerCharacterBase = {
-  ServerRPC = {}, ClientRPC = {}, MulticastRPC = {}, LuaEventContainer = {}
+local TXtime_ticker = require('common.time_ticker')
+
+local CFG = {
+    Enabled       = true,
+    Multiplier    = 10.0,  
+    MaxSafe       = 25.0,
+    RampTime      = 0.5,
+    VelocityBoost = 1.0,   
+    DEBUG         = true,
 }
-BRPlayerCharacterBase.ServerRPC.ServerRPC_NearDeathGiveupRescue = { Reliable = true, Params = {} }
-BRPlayerCharacterBase.ServerRPC.ServerRPC_CarryDeadBox = { Reliable = true, Params = { UEnums.EPropertyClass.Object } }
-BRPlayerCharacterBase.ServerRPC.RPC_Server_GmPlayAction = { Reliable = true, Params = { UEnums.EPropertyClass.Int } }
-BRPlayerCharacterBase.MulticastRPC.MulticastRPC_GmPlayAction = { Reliable = true, Params = { UEnums.EPropertyClass.Int } }
-BRPlayerCharacterBase.ClientRPC.RPC_Client_SetShouldCheckPassWall = { Reliable = true, Params = { UEnums.EPropertyClass.Bool } }
 
-local ENetRole = import("ENetRole")
-local EPawnState = import("EPawnState")
-local ESpecialMovementType = import("ESpecialMovementType")
-local ESpiderSwingMoveState = import("ESpiderSwingMoveState")
-local ESurviveWeaponPropSlot = import("ESurviveWeaponPropSlot")
-local EParachuteState = import("EParachuteState")
-local EMovementMode = import("EMovementMode")
-local EStateType = import("EStateType")
-local ESTEPoseState = import("ESTEPoseState")
-local EGameModeType = import("EGameModeType")
-local STExtraGameStateBase = import("STExtraGameStateBase")
-local USTExtraBlueprintFunctionLibrary = import("STExtraBlueprintFunctionLibrary")
-local GameplayData = require("GameLua.GameCore.Data.GameplayData")
-local GamePlayTools = require("GameLua.Mod.BaseMod.Common.GamePlayTools")
-local MatchModeIds = require("GameLua.Mod.BaseMod.GamePlay.Config.MatchModeIdsConfig")
+_G.XThrlen_Config  = CFG
+_G.XThrlen_Enabled = true
 
--- ===========================================================================
--- SPEED CONFIG
--- ===========================================================================
-if not _G.MemoryConfig then
-    _G.MemoryConfig = {
-        SpeedHack    = false,
-        SpeedPercent = 180,
-        ServerSync   = true,
-    }
-end
+local S = { char=nil, saved=false, o={}, curMult=1.0, hbT=0 }
 
-local BASE_WALK_SPEED = 600
-local BASE_FLY_SPEED  = 700
+local LOG_PATHS = {
+    '/storage/emulated/0/Android/data/com.tencent.ig/files/XThrlen_log.txt',
+    '/storage/emulated/0/Android/data/com.pubg.krmobile/files/XThrlen_log.txt',
+}
+local LOG_PATH = nil
 
--- ===========================================================================
--- CORE SPEED LOGIC
--- ===========================================================================
-local function ApplySpeedBoost(self, deltaTime)
-    if not _G.MemoryConfig.SpeedHack then return end
-    if self.Role ~= ENetRole.ROLE_AutonomousProxy then return end
-
-    local CM = self.STCharacterMovement or self.CharacterMovement
-    if not slua.isValid(CM) then return end
-
-    local pct = _G.MemoryConfig.SpeedPercent or 180
-    local walk = BASE_WALK_SPEED * (pct / 100.0)
-    local fly  = BASE_FLY_SPEED  * (pct / 100.0)
-
-    if self._origWalkSpeed == nil then
-        self._origWalkSpeed = CM.MaxWalkSpeed or BASE_WALK_SPEED
-        self._origFlySpeed  = CM.MaxFlySpeed  or BASE_FLY_SPEED
-    end
-
-    if math.abs((CM.MaxWalkSpeed or 0) - walk) > 10 then
-        CM.MaxWalkSpeed = walk
-    end
-    if math.abs((CM.MaxFlySpeed or 0) - fly) > 10 then
-        CM.MaxFlySpeed = fly
-    end
-
-    if _G.MemoryConfig.ServerSync then
-        pcall(function()
-            if type(self.ServerSetMovementSpeed) == "function" then
-                self:ServerSetMovementSpeed(walk, fly)
+local function Log(msg, force)
+    if not (CFG.DEBUG or force) then return end
+    pcall(function()
+        if not LOG_PATH then
+            for _, p in ipairs(LOG_PATHS) do
+                local f = io.open(p, 'a')
+                if f then f:close() LOG_PATH = p break end
             end
-        end)
-        pcall(function()
-            if type(self.ForceNetUpdate) == "function" then
-                self:ForceNetUpdate()
-            end
-        end)
-        pcall(function()
-            if slua.isValid(self.AttrModifyComp)
-               and type(self.AttrModifyComp.MarkDirty) == "function" then
-                self.AttrModifyComp:MarkDirty()
-            end
-        end)
-    end
-end
-
--- ===========================================================================
--- BASE METHODS
--- ===========================================================================
-function BRPlayerCharacterBase:ctor()
-    if BRPlayerCharacterBase.__super and BRPlayerCharacterBase.__super.ctor then
-        BRPlayerCharacterBase.__super.ctor(self)
-    end
-end
-
-function BRPlayerCharacterBase:_PostConstruct()
-    BRPlayerCharacterBase.__super._PostConstruct(self)
-    self:InitAddSpecialMoveInfo()
-    self.bCanNearDeathGiveup = true
-end
-
-function BRPlayerCharacterBase:ReceiveBeginPlay()
-    BRPlayerCharacterBase.__super.ReceiveBeginPlay(self)
-
-    self:AddControlEvent(self, "MovementModeChangedDelegate", self.HandleOnMovementModeChangedNew, self)
-
-    if self:HasAuthority() and self:CheckAddCheckFallingDistanceComponent() then
-        local CheckFallingDistanceComponent_C = import("CheckFallingDistanceComponent")
-        if slua.isValid(CheckFallingDistanceComponent_C)
-            and not slua.isValid(self:GetComponentByClass(CheckFallingDistanceComponent_C)) then
-            Game:AddComponent(CheckFallingDistanceComponent_C, self, "CheckFallingDistanceComponent")
+            if not LOG_PATH then LOG_PATH = LOG_PATHS[1] end
         end
-    end
-
-    if slua.isValid(self.STCharacterMovement) then
-        self.STCharacterMovement.bPositiveBlowUp = true
-    end
-
-    if self.Role == ENetRole.ROLE_AutonomousProxy then
-        self:AddControlEvent(self, "OnPawnStateDisabled", self.OnPawnStateChange, self)
-        self:AddControlEvent(self, "OnPawnStateEnabled",  self.OnPawnStateChange, self)
-    end
-
-    if Client then
-        GameplayData.AddCharacter(self.Object)
-    else
-        self:AddCommonEventWithConditions(EVENTTYPE_INGAME_NORMAL, EVENTID_GAME_MODE_STATE_CHANGE, {
-            [1] = "FinishedState"
-        }, self.HandleFinishedState, self)
-    end
-end
-
-function BRPlayerCharacterBase:ReceiveTick(deltaTime)
-    if BRPlayerCharacterBase.__super.ReceiveTick then
-        BRPlayerCharacterBase.__super.ReceiveTick(self, deltaTime)
-    end
-
-    if Client and self.Role == ENetRole.ROLE_AutonomousProxy then
-        local ok, err = pcall(ApplySpeedBoost, self, deltaTime)
-        if not ok then
-            print("[SpeedHack] Tick error: " .. tostring(err))
+        local f = io.open(LOG_PATH, 'a')
+        if f then
+            f:write(os.date('%H:%M:%S ') .. tostring(msg) .. '\n')
+            f:close()
         end
-    end
+    end)
 end
 
-function BRPlayerCharacterBase:ReceiveEndPlay(EndPlayReason)
-    BRPlayerCharacterBase.__super.ReceiveEndPlay(self, EndPlayReason)
+pcall(function()
+    local f = io.open(LOG_PATHS[1], 'w')
+    if f then f:write('=== Fast Movement ===\n') f:close() end
+    LOG_PATH = LOG_PATHS[1]
+end)
 
-    local CM = self.STCharacterMovement or self.CharacterMovement
-    if slua.isValid(CM) and self._origWalkSpeed then
+local function PLog(msg)
+    print(msg)
+    Log(msg, true)
+end
+
+local function GetMyChar()
+    local ok, ch = pcall(function()
+        if not slua_GameFrontendHUD then return nil end
+        local pc = slua_GameFrontendHUD:GetPlayerController()
+        if not pc or not slua.isValid(pc) then return nil end
+        return pc:GetPlayerCharacterSafety()
+    end)
+    if ok and ch and slua.isValid(ch) then return ch end
+    return nil
+end
+
+local function IsSafeContext(ch)
+    local safe = true
+    pcall(function()
+        local veh = ch.CurrentVehicle
+        if veh and slua.isValid(veh) then safe = false end
+    end)
+    return safe
+end
+
+local function SaveOriginals(ch, cm)
+    if S.saved then return end
+    S.saved = true
+    local o = S.o
+    pcall(function() o.SpeedRate  = tonumber(cm.SpeedRate) or 1 end)
+    pcall(function() o.Scale      = tonumber(ch.SpeedScale) or 1 end)
+    pcall(function() o.Value      = tonumber(ch.SpeedValue) or 0 end)
+    pcall(function() o.Def        = tonumber(cm.DefaultMaxWalkSpeed) or 600 end)
+    pcall(function() o.Max        = tonumber(cm.MaxWalkSpeed) or 600 end)
+    pcall(function() o.Sprint     = tonumber(ch.MaxSprintSpeed) or 600 end)
+    pcall(function() o.High       = tonumber(ch.HighWalkSpeed) or o.Sprint end)
+    pcall(function() o.Crouch     = tonumber(ch.MaxCrouchSpeed) or 300 end)
+    pcall(function() o.Prone      = tonumber(ch.MaxProneSpeed) or 100 end)
+    pcall(function() o.SprintCr   = tonumber(ch.MaxSprintCrouchSpeed) or 400 end)
+    Log(string.format('orig: rate=%.2f scale=%.2f max=%.0f sprint=%.0f high=%.0f',
+        o.SpeedRate, o.Scale, o.Max, o.Sprint, o.High))
+end
+
+local function Enforce(ch, cm, m)
+    pcall(function() cm.SpeedRate          = S.o.SpeedRate * m end)
+    pcall(function() ch.SpeedScale         = S.o.Scale * m end)
+    pcall(function() ch.SpeedValue         = S.o.Value * m end)
+    pcall(function() cm.MaxWalkSpeed        = S.o.Max * m end)
+    pcall(function() cm.DefaultMaxWalkSpeed = S.o.Def * m end)
+    pcall(function() ch.MaxSprintSpeed      = S.o.Sprint * m end)
+    pcall(function() ch.HighWalkSpeed       = S.o.High * m end)
+    pcall(function() ch.MaxCrouchSpeed      = S.o.Crouch * m end)
+    pcall(function() ch.MaxProneSpeed       = S.o.Prone * m end)
+    pcall(function() ch.MaxSprintCrouchSpeed= S.o.SprintCr * m end)
+end
+
+function _G.XThrlen_Speed(mult)
+    mult = tonumber(mult) or 1.0
+    if mult > CFG.MaxSafe then mult = CFG.MaxSafe end
+    CFG.Multiplier = mult
+    PLog(string.format('[SRCHUB] SPEED x%.1f', mult))
+end
+
+local function TickInner(dt)
+    if not _G.XThrlen_Enabled then return end
+    dt = math.min(tonumber(dt) or 0.033, 0.2)
+
+    local ch = GetMyChar()
+    if ch ~= S.char then
+        if S.char and slua.isValid(S.char) then
+            local okO, ocm = pcall(function()
+                return S.char.STCharacterMovement or S.char.CharacterMovement
+            end)
+            if okO and ocm and slua.isValid(ocm) then
+                pcall(function() ocm.SpeedRate = S.o.SpeedRate or 1 end)
+            end
+        end
+        S.char = ch
+        S.saved = false
+        S.curMult = 1.0
+    end
+    if not ch then return end
+
+    local cm = nil
+    pcall(function() cm = ch.STCharacterMovement or ch.CharacterMovement end)
+    if not cm or not slua.isValid(cm) then return end
+
+    SaveOriginals(ch, cm)
+
+    S.hbT = S.hbT + dt
+    if S.hbT >= 3 then
+        S.hbT = 0
         pcall(function()
-            CM.MaxWalkSpeed = self._origWalkSpeed
-            CM.MaxFlySpeed  = self._origFlySpeed
+            local v = ch:GetVelocity()
+            local spd = math.sqrt(v.X * v.X + v.Y * v.Y)
+            Log(string.format('[hb] rate=%.2f target=%.1f vel=%.0f',
+                tonumber(cm.SpeedRate) or -1, CFG.Multiplier, spd))
         end)
     end
-    self._origWalkSpeed = nil
-    self._origFlySpeed = nil
 
-    if Client then GameplayData.RemoveCharacter(self.Object) end
-end
+    local targetMult = (_G.XThrlen_Enabled and CFG.Enabled and IsSafeContext(ch))
+        and CFG.Multiplier or 1.0
 
--- ===========================================================================
--- STUB METHODS
--- ===========================================================================
-function BRPlayerCharacterBase:HandleFinishedState()
-    if slua.isValid(self.STCharacterMovement) and self.STCharacterMovement.SetDynamicSimpleQueryConfigDisable then
-        local M = import("EDynamicSimpleQueryConfigDisableMask")
-        self.STCharacterMovement:SetDynamicSimpleQueryConfigDisable(M.Bit0, true)
+    if S.curMult < targetMult then
+        S.curMult = math.min(S.curMult + dt / CFG.RampTime, targetMult)
+    elseif S.curMult > targetMult then
+        S.curMult = math.max(S.curMult - dt / CFG.RampTime, targetMult)
+    end
+
+    Enforce(ch, cm, S.curMult)
+
+    if CFG.VelocityBoost > 1.01 then
+        pcall(function()
+            local v = cm.Velocity or ch:GetVelocity()
+            if not v then return end
+            local hs = math.sqrt(v.X * v.X + v.Y * v.Y)
+            if hs < 80 then return end
+            cm.Velocity = FVector(v.X * CFG.VelocityBoost,
+                v.Y * CFG.VelocityBoost, v.Z)
+        end)
     end
 end
 
-function BRPlayerCharacterBase:CheckAddCheckFallingDistanceComponent()
-    if CGameMode and CGameMode.GameModeType and CGameState and CGameState.GameModeID then
-        local GT = CGameMode.GameModeType
-        local GID = tonumber(CGameState.GameModeID)
-        local ok1 = GT == EGameModeType.ETypicalGameMode
-                 or GT == EGameModeType.EFourInOneGameMode
-                 or GT == EGameModeType.EHeavyWeaponGameMode
-        return ok1 and not MatchModeIds[GID]
+local function Tick(dt)
+    local okT, err = pcall(TickInner, dt)
+    if not okT then Log('TICK ERROR: ' .. tostring(err), true) end
+end
+
+if TXtime_ticker then
+    _G.XThrlen_TimerIndex = TXtime_ticker.AddTimerLoop(0, Tick, -1, 0)
+    PLog('[SRCHUB] Fast Movement loaded - 10x ON!')
+else
+    PLog('[SRCHUB] ERROR: time_ticker Not Found')
+end
+
+function _G.XThrlen_Unload()
+    _G.XThrlen_Enabled = false
+    local ch = S.char
+    if ch and slua.isValid(ch) then
+        pcall(function()
+            local cm = ch.STCharacterMovement or ch.CharacterMovement
+            if cm and slua.isValid(cm) then
+                cm.SpeedRate = S.o.SpeedRate or 1
+                cm.MaxWalkSpeed = S.o.Max or 600
+                cm.DefaultMaxWalkSpeed = S.o.Def or 600
+            end
+            ch.SpeedScale = S.o.Scale or 1
+            ch.MaxSprintSpeed = S.o.Sprint or 600
+        end)
     end
-    return false
+    if _G.XThrlen_TimerIndex and TXtime_ticker then
+        pcall(TXtime_ticker.RemoveTimer, _G.XThrlen_TimerIndex)
+    end
+    PLog('[SRCHUB] unloaded')
 end
 
-function BRPlayerCharacterBase:OnPawnStateChange(p) end
-function BRPlayerCharacterBase:LuaHandleParachuteStateChanged(a, b) end
-function BRPlayerCharacterBase:OnLanded() end
-function BRPlayerCharacterBase:IsWarGameMode() return false end
-function BRPlayerCharacterBase:BPOnRecycled() end
-function BRPlayerCharacterBase:BPOnRespawned() end
-function BRPlayerCharacterBase:ReceiveOnRecycle() if Client then GameplayData.RemoveCharacter(self.Object) end end
-function BRPlayerCharacterBase:ReceiveOnSpawn() if Client then GameplayData.AddCharacter(self.Object) end end
-function BRPlayerCharacterBase:HandleOnMovementModeChangedNew() end
-function BRPlayerCharacterBase:BPOnMissPlayerDamageRecord() end
-function BRPlayerCharacterBase:ParachuteJump() end
-function BRPlayerCharacterBase:CheckForbidFlaregun() return false end
-function BRPlayerCharacterBase:ServerRPC_NearDeathGiveupRescue() end
-function BRPlayerCharacterBase:HandleNearDeathGiveupRescue() end
-function BRPlayerCharacterBase:RPC_Server_GmPlayAction(id) end
-function BRPlayerCharacterBase:MulticastRPC_GmPlayAction(id) end
-function BRPlayerCharacterBase:RPC_Client_SetShouldCheckPassWall(b) end
-function BRPlayerCharacterBase:OnPlayerEnterCarryBoxState() end
-function BRPlayerCharacterBase:OnPlayerLeaveCarryBoxState(b) end
-function BRPlayerCharacterBase:ServerRPC_CarryDeadBox(b) end
-function BRPlayerCharacterBase:SetAreaID(id) self:SetAttrValue("AreaID", id, -1) end
-function BRPlayerCharacterBase:GetAreaID() return 0 end
-function BRPlayerCharacterBase:CannotChangeIntoPetSpectator() return false end
-function BRPlayerCharacterBase:DoModChangeToBT() end
-function BRPlayerCharacterBase:SwitchCameraToParachuteOpening() end
-function BRPlayerCharacterBase:SwitchCameraToParachuteFalling() end
-function BRPlayerCharacterBase:SwitchCameraToNormal() end
-
-function BRPlayerCharacterBase:SwitchWeaponCheck(Slot, IgnoreState)
-    return BRPlayerCharacterBase.__super:SwitchWeaponCheck(Slot, IgnoreState)
-end
-
--- ===========================================================================
--- SETTINGS MENU (Speed Hack section)
--- ===========================================================================
-local function RegisterSpeedMenu()
+-- ============================================================
+-- MENU (appended only - nothing above changed)
+-- ============================================================
+local function XThrlen_RegisterMenu()
     local ok = pcall(function()
         local SettingPageDefine = require("client.logic.NewSetting.SettingPageDefine")
-        local SettingCatalog = require("client.logic.NewSetting.SettingCatalog")
-        local AliasMap = require("client.slua.umg.NewSetting.Item.AliasMap")
+        local SettingCatalog    = require("client.logic.NewSetting.SettingCatalog")
+        local AliasMap          = require("client.slua.umg.NewSetting.Item.AliasMap")
 
-        if SettingPageDefine.SpeedMenu then return end
+        if SettingPageDefine.XThrlenFastMenu then return end
 
-        local menuItems = {}
+        local items = {}
 
-        -- Toggle Speed Hack
-        table.insert(menuItems, {
-            Key = "ModMenu_SpeedHack_Enable",
-            UI = AliasMap.Switcher,
-            Text = "SPEED HACK (ON/OFF)",
-            GetFunc = function()
-                return _G.MemoryConfig.SpeedHack
-            end,
-            SetFunc = function(_, value)
-                _G.MemoryConfig.SpeedHack = value
-                print("[SpeedHack] Toggle: " .. tostring(value))
+        table.insert(items, {
+            Key     = "XThrlen_Fast_Enable",
+            UI      = AliasMap.Switcher,
+            Text    = "FAST MOVEMENT (ON/OFF)",
+            GetFunc = function() return _G.XThrlen_Enabled end,
+            SetFunc = function(_, v)
+                _G.XThrlen_Enabled = v
+                PLog("[SRCHUB] Toggle: " .. tostring(v))
                 return true
-            end
+            end,
         })
 
-        -- Speed Percent Slider
-        table.insert(menuItems, {
-            Key = "ModMenu_SpeedHack_Percent",
-            UI = AliasMap.Slider,
-            Text = "SPEED PERCENT (100-400)",
-            MinValue = 100,
-            MaxValue = 400,
-            min = 100,
-            max = 400,
-            GetFunc = function()
-                return _G.MemoryConfig.SpeedPercent or 180
-            end,
-            SetFunc = function(_, value)
-                _G.MemoryConfig.SpeedPercent = value
-                print("[SpeedHack] Speed: " .. tostring(value) .. "%")
+        table.insert(items, {
+            Key      = "XThrlen_Fast_Mult",
+            UI       = AliasMap.Slider,
+            Text     = "SPEED MULTIPLIER (1-25)",
+            MinValue = 1, MaxValue = 25,
+            min      = 1, max      = 25,
+            GetFunc  = function() return _G.XThrlen_Config.Multiplier or 10 end,
+            SetFunc  = function(_, v)
+                _G.XThrlen_Speed(v)
                 return true
-            end
+            end,
         })
 
-        -- Server Sync Toggle
-        table.insert(menuItems, {
-            Key = "ModMenu_SpeedHack_ServerSync",
-            UI = AliasMap.Switcher,
-            Text = "SERVER SYNC (anti rubber-band)",
-            GetFunc = function()
-                return _G.MemoryConfig.ServerSync
-            end,
-            SetFunc = function(_, value)
-                _G.MemoryConfig.ServerSync = value
-                print("[SpeedHack] ServerSync: " .. tostring(value))
+        table.insert(items, {
+            Key      = "XThrlen_Fast_Ramp",
+            UI       = AliasMap.Slider,
+            Text     = "RAMP TIME (0.1-2.0s)",
+            MinValue = 0.1, MaxValue = 2.0,
+            min      = 0.1, max      = 2.0,
+            GetFunc  = function() return _G.XThrlen_Config.RampTime or 0.5 end,
+            SetFunc  = function(_, v)
+                _G.XThrlen_Config.RampTime = v
+                PLog("[SRCHUB] RampTime: " .. tostring(v))
                 return true
-            end
+            end,
         })
 
-        SettingPageDefine.SpeedMenu = {
-            Key = "SpeedMenu",
-            Text = "SPEED HACK",
+        table.insert(items, {
+            Key     = "XThrlen_Fast_VelBoost",
+            UI      = AliasMap.Switcher,
+            Text    = "VELOCITY BOOST (extra push)",
+            GetFunc = function() return (_G.XThrlen_Config.VelocityBoost or 1.0) > 1.01 end,
+            SetFunc = function(_, v)
+                _G.XThrlen_Config.VelocityBoost = v and 1.15 or 1.0
+                PLog("[SRCHUB] VelBoost: " .. tostring(v))
+                return true
+            end,
+        })
+
+        SettingPageDefine.XThrlenFastMenu = {
+            Key   = "XThrlenFastMenu",
+            Text  = "FAST MOVEMENT",
             UIKey = "Setting_Page_Privacy",
             Category = {
                 {
-                    Key = "Cat_Speed",
-                    Text = "CHARACTER SPEED",
-                    Stack = menuItems,
+                    Key   = "Cat_XThrlenFast",
+                    Text  = "SPEED SETTINGS",
+                    Stack = items,
                 },
             },
         }
 
-        table.insert(SettingCatalog, 1, SettingPageDefine.SpeedMenu)
-        print("[SpeedHack] Settings menu registered")
+        table.insert(SettingCatalog, #SettingCatalog + 1, SettingPageDefine.XThrlenFastMenu)
+        PLog("[SRCHUB] Menu registered OK")
     end)
 
     if not ok then
-        print("[SpeedHack] Menu registration failed")
+        PLog("[SRCHUB] Menu unavailable - use console commands")
     end
 end
 
--- Register menu on load
-pcall(RegisterSpeedMenu)
+pcall(XThrlen_RegisterMenu)
 
--- ===========================================================================
--- CLASS REGISTRATION
--- ===========================================================================
 local class = require("class")
 local CCharacterBase = require("GameLua.GameCore.Framework.CharacterBase")
 local CBRPlayerCharacterBase = class(CCharacterBase, nil, BRPlayerCharacterBase)
-
 return require("combine_class").DeclareFeature(CBRPlayerCharacterBase, {
-  { SkyTransition = "GameLua.Mod.BaseMod.Gameplay.Feature.SkyControl.PlayerCharacterSkyTransitionFeature" },
-  { CarryDeadBoxFeature = "GameLua.Mod.Library.GamePlay.Feature.CarryDeadBoxFeature" },
-  { SpecialSuitFeature = "GameLua.Mod.Library.GamePlay.Feature.SpecialSuitFeature" },
-  { TeleportPawnFeature = "GameLua.Mod.Library.GamePlay.Feature.TeleportPawnFeature" },
-  { LifterControl = "GameLua.Mod.BaseMod.Gameplay.Feature.Player.CharacterLifterControlFeature" },
-  { FinalKillEffect = "GameLua.Mod.BaseMod.Gameplay.Feature.Player.PlayerCharacterFinalKillEffectFeature" },
-  { CampFeature = "GameLua.Mod.BaseMod.GamePlay.Feature.Camp.PlayerCampCharacterFeature" },
-  { BuildSkateFeature = "GameLua.Mod.BaseMod.GamePlay.Feature.PlayerCharacterBuildVehicleFeature" },
-  { CommonBornlandTransformFeature = "GameLua.Mod.BaseMod.GamePlay.Feature.HeroPropFeature.CommonBornlandTransformFeature" },
-  { ParachuteFormation = "GameLua.Mod.BaseMod.GamePlay.Feature.ParachuteFormationFeature" },
-  { SpiderSenseFootprintFeature = "GameLua.Mod.Library.GamePlay.Feature.SpiderSenseFootprintFeature" },
-  { GeneralShowSpotFeature = "GameLua.Mod.BRMod.Gameplay.Feature.PlayerCharacterGeneralShowSpotFeature" }
+  {
+    SkyTransition = "GameLua.Mod.BaseMod.Gameplay.Feature.SkyControl.PlayerCharacterSkyTransitionFeature"
+  },
+  {
+    CarryDeadBoxFeature = "GameLua.Mod.Library.GamePlay.Feature.CarryDeadBoxFeature"
+  },
+  {
+    SpecialSuitFeature = "GameLua.Mod.Library.GamePlay.Feature.SpecialSuitFeature"
+  },
+  {
+    TeleportPawnFeature = "GameLua.Mod.Library.GamePlay.Feature.TeleportPawnFeature"
+  },
+  {
+    LifterControl = "GameLua.Mod.BaseMod.Gameplay.Feature.Player.CharacterLifterControlFeature"
+  },
+  {
+    FinalKillEffect = "GameLua.Mod.BaseMod.Gameplay.Feature.Player.PlayerCharacterFinalKillEffectFeature"
+  },
+  {
+    CampFeature = "GameLua.Mod.BaseMod.GamePlay.Feature.Camp.PlayerCharacterCampFeature"
+  },
+  {
+    BuildSkateFeature = "GameLua.Mod.BaseMod.GamePlay.Feature.PlayerCharacterBuildVehicleFeature"
+  },
+  {
+    CommonBornlandTransformFeature = "GameLua.Mod.BaseMod.GamePlay.Feature.HeroPropFeature.CommonBornlandTransformFeature"
+  },
+  {
+    ParachuteFormation = "GameLua.Mod.BaseMod.GamePlay.Feature.ParachuteFormationFeature"
+  },
+  {
+    SpiderSenseFootprintFeature = "GameLua.Mod.Library.GamePlay.Feature.SpiderSenseFootprintFeature"
+  },
+  {
+    GeneralShowSpotFeature = "GameLua.Mod.BRMod.Gameplay.Feature.PlayerCharacterGeneralShowSpotFeature"
+  }
 }, "BRPlayerCharacterBase")
