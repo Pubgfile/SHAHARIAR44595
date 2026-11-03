@@ -1,5 +1,5 @@
 -- ═══════════════════════════════════════════════════════════════════════════
--- BRPlayerCharacterBase.lua - FINAL FIXED FORWARD SPEED HACK
+-- BRPlayerCharacterBase.lua - PERFECT FORWARD SPEED HACK (FINAL CHECKED)
 -- ═══════════════════════════════════════════════════════════════════════════
 
 local BRPlayerCharacterBase = {
@@ -32,7 +32,7 @@ local MatchModeIds = require("GameLua.Mod.BaseMod.GamePlay.Config.MatchModeIdsCo
 -- ═══════════════════════════════════════════════════════════════════════════
 _G.SpeedHackConfig = _G.SpeedHackConfig or {
     Enabled = false,
-    SpeedMultiplier = 5, 
+    SpeedMultiplier = 5, -- ১ থেকে ১০০ এর মধ্যে যেকোনো সংখ্যা
 }
 
 _G.SpeedHackState = _G.SpeedHackState or {
@@ -41,7 +41,7 @@ _G.SpeedHackState = _G.SpeedHackState or {
 }
 
 -- ═══════════════════════════════════════════════════════════════════════════
--- REAL FORWARD SPEED LOGIC (ENGINE FORCE)
+-- REAL FORWARD SPEED LOGIC (ACCELERATION & INPUT OVERRIDE)
 -- ═══════════════════════════════════════════════════════════════════════════
 local function ApplySpeedHack(localPlayer)
     if not slua.isValid(localPlayer) then return end
@@ -53,7 +53,7 @@ local function ApplySpeedHack(localPlayer)
         local state = _G.SpeedHackState
         local config = _G.SpeedHackConfig
         
-        -- প্রথমবার অরিজিনাল স্পিড সেভ করা
+        -- প্রথমবার গেমের অরিজিনাল স্পিড সেভ করা
         if not state.OrigWalk then
             state.OrigWalk = CM.MaxWalkSpeed or 600
             state.OrigAccel = CM.MaxAcceleration or 2048
@@ -63,28 +63,26 @@ local function ApplySpeedHack(localPlayer)
             local mult = tonumber(config.SpeedMultiplier) or 5
             if mult < 1 then mult = 1 end
             
-            -- গেমের ম্যাক্সিমাম স্পিড এবং অ্যাক্সিলারেশন বাড়ানো
+            -- ১. স্পিড এবং ত্বরণ (Acceleration) বাড়ানো
             CM.MaxWalkSpeed = (state.OrigWalk or 600) * mult
             CM.MaxAcceleration = (state.OrigAccel or 2048) * mult
             
-            -- সামনের দিকে স্পিড ফোর্স করার জন্য বর্তমান ভেলোসিটি চেক
+            -- ২. সামনের দিকে জোরপূর্বক গতি বাড়ানোর জন্য সঠিক মেথড
             local currentVel = CM.Velocity
             if currentVel then
-                local speed2D = math.sqrt(currentVel.X^2 + currentVel.Y^2)
                 -- যদি ক্যারেক্টার মুভ করে (সামনে বা পেছনে)
+                local speed2D = math.sqrt(currentVel.X^2 + currentVel.Y^2)
                 if speed2D > 10 then
                     local dirX = currentVel.X / speed2D
                     local dirY = currentVel.Y / speed2D
                     
-                    -- নতুন স্পিড ক্যালকুলেশন
+                    -- নতুন গতি সেট করা (এটি সামনের দিকের জন্য কাজ করবে)
                     local newSpeed = (state.OrigWalk or 600) * mult
-                    
-                    -- ইঞ্জিনের ভেলোসিটি সরাসরি সেট না করে সঠিক উপায়ে প্রয়োগ
                     CM.Velocity = FVector(dirX * newSpeed, dirY * newSpeed, currentVel.Z)
                 end
             end
         else
-            -- টগল অফ হলে আগের নরমাল স্পিডে ফিরে যাবে
+            -- টগল অফ হলে রিসেট
             CM.MaxWalkSpeed = state.OrigWalk or 600
             CM.MaxAcceleration = state.OrigAccel or 2048
         end
@@ -210,7 +208,7 @@ pcall(function()
 end)
 
 -- ═══════════════════════════════════════════════════════════════════════════
--- BASE METHODS
+-- BASE METHODS (বাড়তি সব রিমুভ করা)
 -- ═══════════════════════════════════════════════════════════════════════════
 function BRPlayerCharacterBase:ctor() end
 function BRPlayerCharacterBase:_PostConstruct()
