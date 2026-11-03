@@ -1,5 +1,5 @@
 -- ═══════════════════════════════════════════════════════════════════════════
--- BRPlayerCharacterBase.lua - FIXED 100% WORKING SPEED HACK
+-- BRPlayerCharacterBase.lua - FINAL WORKING SPEED HACK (VELOCITY FORCE)
 -- ═══════════════════════════════════════════════════════════════════════════
 
 local BRPlayerCharacterBase = {
@@ -28,23 +28,20 @@ local GamePlayTools = require("GameLua.Mod.BaseMod.Common.GamePlayTools")
 local MatchModeIds = require("GameLua.Mod.BaseMod.GamePlay.Config.MatchModeIdsConfig")
 
 -- ═══════════════════════════════════════════════════════════════════════════
--- SPEED HACK CONFIG (FIXED 1-100 MULTIPLIER)
+-- SPEED HACK CONFIG
 -- ═══════════════════════════════════════════════════════════════════════════
 _G.SpeedHackConfig = _G.SpeedHackConfig or {
     Enabled = false,
-    SpeedMultiplier = 5, -- স্লাইডারে আপনি যা দিবেন এখানে সেটা সেভ হবে
+    SpeedMultiplier = 5, 
 }
 
 _G.SpeedHackState = _G.SpeedHackState or {
     OrigWalk = nil,
-    OrigRun = nil,
-    OrigCrouch = nil,
-    OrigSwim = nil,
     OrigAccel = nil,
 }
 
 -- ═══════════════════════════════════════════════════════════════════════════
--- REAL SPEED LOGIC (FORCED OVERRIDE ENGINE)
+-- VELOCITY FORCE SPEED LOGIC
 -- ═══════════════════════════════════════════════════════════════════════════
 local function ApplySpeedHack(localPlayer)
     if not slua.isValid(localPlayer) then return end
@@ -59,9 +56,6 @@ local function ApplySpeedHack(localPlayer)
         -- প্রথমবার অরিজিনাল স্পিড সেভ করা
         if not state.OrigWalk then
             state.OrigWalk = CM.MaxWalkSpeed or 600
-            state.OrigRun = CM.MaxCustomMovementSpeed or 600
-            state.OrigCrouch = CM.MaxWalkSpeedCrouched or 300
-            state.OrigSwim = CM.MaxSwimSpeed or 300
             state.OrigAccel = CM.MaxAcceleration or 2048
         end
         
@@ -72,26 +66,35 @@ local function ApplySpeedHack(localPlayer)
             local targetSpeed = (state.OrigWalk or 600) * mult
             local targetAccel = (state.OrigAccel or 2048) * mult
             
-            -- জোর করে স্পিড অ্যাপ্লাই করা (গেম যাতে রিসেট করতে না পারে)
+            -- ১. স্পিড এবং অ্যাক্সিলারেশন ফোর্স করা
             CM.MaxWalkSpeed = targetSpeed
-            CM.MaxCustomMovementSpeed = targetSpeed
-            CM.MaxWalkSpeedCrouched = targetSpeed * 0.6
-            CM.MaxSwimSpeed = targetSpeed * 0.6
             CM.MaxAcceleration = targetAccel
             
+            -- ২. Velocity Force (সরাসরি গতি বাড়ানো)
+            local vel = CM.Velocity
+            if vel and (vel.X ~= 0 or vel.Y ~= 0) then
+                local currentSpeed = math.sqrt(vel.X^2 + vel.Y^2)
+                if currentSpeed > 10 then -- যদি ক্যারেক্টার মুভ করে
+                    local dirX = vel.X / currentSpeed
+                    local dirY = vel.Y / currentSpeed
+                    
+                    -- গেমের নরমাল স্পিডের সাথে মাল্টিপ্লায়ার গুণ করা
+                    local newSpeed = (state.OrigWalk or 600) * mult
+                    
+                    -- নতুন ভেলোসিটি সেট করা
+                    CM.Velocity = FVector(dirX * newSpeed, dirY * newSpeed, vel.Z)
+                end
+            end
         else
-            -- বন্ধ করলে আগের নরমাল স্পিডে ফিরে যাবে
+            -- টগল অফ হলে রিসেট
             CM.MaxWalkSpeed = state.OrigWalk or 600
-            CM.MaxCustomMovementSpeed = state.OrigRun or 600
-            CM.MaxWalkSpeedCrouched = state.OrigCrouch or 300
-            CM.MaxSwimSpeed = state.OrigSwim or 300
             CM.MaxAcceleration = state.OrigAccel or 2048
         end
     end)
 end
 
 -- ═══════════════════════════════════════════════════════════════════════════
--- FAST LOOP (0.01s tick for instant force)
+-- FAST LOOP (0.01s tick)
 -- ═══════════════════════════════════════════════════════════════════════════
 local function SpeedHackTick()
     pcall(function()
@@ -106,7 +109,7 @@ local function SpeedHackTick()
     
     local okTicker, ticker = pcall(require, "common.time_ticker")
     if okTicker and ticker and ticker.AddTimerOnce then
-        ticker.AddTimerOnce(0.01, SpeedHackTick) -- ০.০১ সেকেন্ড পর পর ফোর্স
+        ticker.AddTimerOnce(0.01, SpeedHackTick)
     end
 end
 
@@ -118,7 +121,7 @@ pcall(function()
 end)
 
 -- ═══════════════════════════════════════════════════════════════════════════
--- MENU (FIXED SLIDER 1 TO 100)
+-- MENU
 -- ═══════════════════════════════════════════════════════════════════════════
 function _G.InitSpeedHackMenu()
     if _G.SpeedHackMenuInitialized then return end
@@ -144,13 +147,11 @@ function _G.InitSpeedHackMenu()
         local AliasMap = require("client.slua.umg.NewSetting.Item.AliasMap")
         
         local StackSpeedHack = {
-            -- Main Toggle
             { Key = "ModMenu_Speed_Ex", UI = AliasMap.TitleSwitcher, 
               Text = "⚡ SPEED HACK (1X - 100X)", ExpandIndex = 0, 
               GetFunc = function() return _G.SpeedHackConfig.Enabled end, 
               SetFunc = function(c,v) _G.SpeedHackConfig.Enabled = v return true end },
             
-            -- Slider Max Value 100
             { Key = "ModMenu_Speed_Value", UI = AliasMap.Slider, 
               Text = "   MULTIPLIER (1=Normal, 100=Max)", 
               ExpandHandle = "ModMenu_Speed_Ex", 
@@ -209,7 +210,7 @@ pcall(function()
 end)
 
 -- ═══════════════════════════════════════════════════════════════════════════
--- BASE METHODS (GAME MUST HAVE THIS)
+-- BASE METHODS
 -- ═══════════════════════════════════════════════════════════════════════════
 function BRPlayerCharacterBase:ctor() end
 function BRPlayerCharacterBase:_PostConstruct()
