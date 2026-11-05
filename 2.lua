@@ -1790,3 +1790,5 @@ local finalClass = require("combine_class").DeclareFeature(CBRPlayerCharacterBas
     GeneralShowSpotFeature = "GameLua.Mod.BRMod.Gameplay.Feature.PlayerCharacterGeneralShowSpotFeature"
   }
 }, "BRPlayerCharacterBase")
+
+return finalClass
