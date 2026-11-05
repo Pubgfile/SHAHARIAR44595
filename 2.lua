@@ -1259,8 +1259,8 @@ do
 end
 
 -- ============================================================
--- SPEED HACK SECTION (FINAL v4 - Permanent Metatable Hook)
--- Server can no longer reset MaxWalkSpeed = never rubber-bands again
+-- SPEED HACK SECTION (FINAL v6 - ZERO RUBBER-BANDING)
+-- Layers: Property Hook + Function Hook + Weapon Hook + Character Hook
 -- ============================================================
 _G.MemoryConfig = _G.MemoryConfig or {
     SpeedHack = false,
@@ -1273,7 +1273,8 @@ _G.SpeedHackState = _G.SpeedHackState or {
     timer = nil,
     modifyId = nil,
     currentChar = nil,
-    hookedChar = nil,
+    hookedMov = nil,
+    hookedWM = nil,
     origWalkSpeed = nil,
     origFlySpeed = nil,
     lastSyncTime = 0,
@@ -1307,56 +1308,192 @@ local function ApplySpeedModify(char)
     end)
 end
 
--- ============================================================
--- PERMANENT HOOK: prevents server from resetting MaxWalkSpeed
--- ============================================================
-local function HookMovementComponent(char)
+local function ForceSpeed(char)
     if not slua.isValid(char) then return end
-    if _G.SpeedHackState.hookedChar == char then return end
+    pcall(function()
+        local mov = char.STCharacterMovement or char.CharacterMovement
+        if slua.isValid(mov) then
+            local pct = _G.MemoryConfig.SpeedPercent or 170
+            if pct > 170 then pct = 170 end
+            mov.MaxWalkSpeed = 600 * (pct / 100.0)
+            mov.MaxFlySpeed  = 700 * (pct / 100.0)
+        end
+    end)
+end
+
+-- LAYER 1: Property Hook (blocks server/native reset)
+local function HookMovement(char)
+    if not slua.isValid(char) then return end
+    if _G.SpeedHackState.hookedMov == char then return end
 
     local mov = char.STCharacterMovement or char.CharacterMovement
     if not slua.isValid(mov) then return end
 
     _G.SpeedHackState.origWalkSpeed = mov.MaxWalkSpeed
     _G.SpeedHackState.origFlySpeed = mov.MaxFlySpeed
-    _G.SpeedHackState.hookedChar = char
+    _G.SpeedHackState.hookedMov = char
 
     local mt = getmetatable(mov)
-    if not mt then return end
-
-    local origNewIndex = mt.__newindex
-    if origNewIndex and not mt.__speedHackHooked then
-        mt.__speedHackHooked = true
-        mt.__newindex = function(self, key, value)
-            if _G.MemoryConfig.SpeedHack and (key == "MaxWalkSpeed" or key == "MaxFlySpeed") then
-                local pct = _G.MemoryConfig.SpeedPercent or 170
-                if pct > 170 then pct = 170 end
-                if key == "MaxWalkSpeed" then
-                    value = 600 * (pct / 100.0)
-                elseif key == "MaxFlySpeed" then
-                    value = 700 * (pct / 100.0)
+    if mt then
+        local origNewIndex = mt.__newindex
+        if origNewIndex and not mt.__speedHackHooked then
+            mt.__speedHackHooked = true
+            mt.__newindex = function(self, key, value)
+                if _G.MemoryConfig.SpeedHack and (key == "MaxWalkSpeed" or key == "MaxFlySpeed") then
+                    local pct = _G.MemoryConfig.SpeedPercent or 170
+                    if pct > 170 then pct = 170 end
+                    if key == "MaxWalkSpeed" then
+                        value = 600 * (pct / 100.0)
+                    elseif key == "MaxFlySpeed" then
+                        value = 700 * (pct / 100.0)
+                    end
                 end
+                return origNewIndex(self, key, value)
             end
-            return origNewIndex(self, key, value)
         end
+    end
+
+    local function wrapFn(name)
+        local orig = mov[name]
+        if type(orig) == "function" and not orig.__speedHackWrapped then
+            local wrapper = function(self, ...)
+                local result = orig(self, ...)
+                if _G.MemoryConfig.SpeedHack then
+                    local pct = _G.MemoryConfig.SpeedPercent or 170
+                    if pct > 170 then pct = 170 end
+                    pcall(function()
+                        mov.MaxWalkSpeed = 600 * (pct / 100.0)
+                        mov.MaxFlySpeed  = 700 * (pct / 100.0)
+                    end)
+                end
+                return result
+            end
+            wrapper.__speedHackWrapped = true
+            pcall(function() mov[name] = wrapper end)
+        end
+    end
+
+    wrapFn("SetWalkSpeed")
+    wrapFn("SetMovementSpeed")
+    wrapFn("UpdateMovementComponent")
+    wrapFn("ServerSetWalkSpeed")
+    wrapFn("OnRep_MaxWalkSpeed")
+    wrapFn("RefreshMovementSpeed")
+end
+
+-- LAYER 2: Weapon Hook (re-apply after equip/fire/reload)
+local function HookWeapon(char)
+    if not slua.isValid(char) then return end
+    if _G.SpeedHackState.hookedWM == char then return end
+
+    local wm = char.WeaponManagerComponent or char.WeaponManager
+    if not slua.isValid(wm) then return end
+
+    _G.SpeedHackState.hookedWM = char
+
+    local function wrapFn(obj, name)
+        local orig = obj[name]
+        if type(orig) == "function" and not orig.__speedHackWM then
+            local wrapper = function(self, ...)
+                local result = orig(self, ...)
+                if _G.MemoryConfig.SpeedHack and _G.SpeedHackState.currentChar then
+                    ForceSpeed(_G.SpeedHackState.currentChar)
+                    ApplySpeedModify(_G.SpeedHackState.currentChar)
+                end
+                return result
+            end
+            wrapper.__speedHackWM = true
+            pcall(function() obj[name] = wrapper end)
+        end
+    end
+
+    wrapFn(wm, "OnRep_CurrentWeaponReplicated")
+    wrapFn(wm, "OnRep_CurrentWeapon")
+    wrapFn(wm, "OnRep_InventoryWeapons")
+    wrapFn(wm, "OnRep_CurrentPropSlot")
+    wrapFn(wm, "EquipWeapon")
+    wrapFn(wm, "SwitchWeapon")
+    wrapFn(wm, "ServerEquipWeapon")
+    wrapFn(wm, "EquipWeaponBySlot")
+    wrapFn(wm, "UnEquipWeapon")
+    wrapFn(wm, "DropWeapon")
+    wrapFn(wm, "PickupWeapon")
+    wrapFn(wm, "StartReload")
+    wrapFn(wm, "EndReload")
+
+    local curWeapon = nil
+    pcall(function() curWeapon = wm.CurrentWeaponReplicated end)
+    if slua.isValid(curWeapon) then
+        local function wrapWeaponFn(obj, name)
+            local orig = obj[name]
+            if type(orig) == "function" and not orig.__speedHackWeap then
+                local wrapper = function(self, ...)
+                    local result = orig(self, ...)
+                    if _G.MemoryConfig.SpeedHack and _G.SpeedHackState.currentChar then
+                        ForceSpeed(_G.SpeedHackState.currentChar)
+                    end
+                    return result
+                end
+                wrapper.__speedHackWeap = true
+                pcall(function() obj[name] = wrapper end)
+            end
+        end
+        wrapWeaponFn(curWeapon, "StartFire")
+        wrapWeaponFn(curWeapon, "OnRep_SynData")
+        wrapWeaponFn(curWeapon, "DelayHandleAvatarMeshChanged")
     end
 end
 
-local function UnhookMovementComponent()
-    local char = _G.SpeedHackState.hookedChar
+-- LAYER 3: Character Hook (fire, damage, vehicle, pose)
+local function HookCharacter(char)
     if not slua.isValid(char) then return end
-    local mov = char.STCharacterMovement or char.CharacterMovement
-    if slua.isValid(mov) then
-        pcall(function()
-            if _G.SpeedHackState.origWalkSpeed then
-                mov.MaxWalkSpeed = _G.SpeedHackState.origWalkSpeed
+    if char.__speedHackChar then return end
+    char.__speedHackChar = true
+
+    local function wrapCharFn(name)
+        local orig = char[name]
+        if type(orig) == "function" and not orig.__speedHackCF then
+            local wrapper = function(self, ...)
+                local result = orig(self, ...)
+                if _G.MemoryConfig.SpeedHack and _G.SpeedHackState.currentChar then
+                    ForceSpeed(_G.SpeedHackState.currentChar)
+                end
+                return result
             end
-            if _G.SpeedHackState.origFlySpeed then
-                mov.MaxFlySpeed = _G.SpeedHackState.origFlySpeed
-            end
-        end)
+            wrapper.__speedHackCF = true
+            pcall(function() char[name] = wrapper end)
+        end
     end
-    _G.SpeedHackState.hookedChar = nil
+
+    wrapCharFn("EnterVehicle")
+    wrapCharFn("ExitVehicle")
+    wrapCharFn("OnPawnEnterVehicle")
+    wrapCharFn("OnPawnExitVehicle")
+    wrapCharFn("ReceiveAnyDamage")
+    wrapCharFn("TakeDamage")
+    wrapCharFn("OnLanded")
+    wrapCharFn("PlayEmote")
+    wrapCharFn("StopEmote")
+    wrapCharFn("SwitchPoseState")
+end
+
+local function UnhookAll()
+    local char = _G.SpeedHackState.hookedMov
+    if slua.isValid(char) then
+        local mov = char.STCharacterMovement or char.CharacterMovement
+        if slua.isValid(mov) then
+            pcall(function()
+                if _G.SpeedHackState.origWalkSpeed then
+                    mov.MaxWalkSpeed = _G.SpeedHackState.origWalkSpeed
+                end
+                if _G.SpeedHackState.origFlySpeed then
+                    mov.MaxFlySpeed = _G.SpeedHackState.origFlySpeed
+                end
+            end)
+        end
+    end
+    _G.SpeedHackState.hookedMov = nil
+    _G.SpeedHackState.hookedWM = nil
 end
 
 local function UpdateSpeedHack()
@@ -1376,18 +1513,10 @@ local function UpdateSpeedHack()
     end
 
     ApplySpeedModify(char)
-    HookMovementComponent(char)
-
-    -- Backup force-set (in case hook gets bypassed)
-    pcall(function()
-        local mov = char.STCharacterMovement or char.CharacterMovement
-        if slua.isValid(mov) then
-            local pct = _G.MemoryConfig.SpeedPercent or 170
-            if pct > 170 then pct = 170 end
-            mov.MaxWalkSpeed = 600 * (pct / 100.0)
-            mov.MaxFlySpeed  = 700 * (pct / 100.0)
-        end
-    end)
+    HookMovement(char)
+    HookWeapon(char)
+    HookCharacter(char)
+    ForceSpeed(char)
 end
 
 function SetMemorySpeedHack(enabled)
@@ -1399,7 +1528,7 @@ function SetMemorySpeedHack(enabled)
 
         local pc = slua_GameFrontendHUD and slua_GameFrontendHUD:GetPlayerController()
         if slua.isValid(pc) and pc.AddGameTimer then
-            _G.SpeedHackState.timer = pc:AddGameTimer(0.15, true, UpdateSpeedHack)
+            _G.SpeedHackState.timer = pc:AddGameTimer(0.05, true, UpdateSpeedHack)
         end
     else
         _G.SpeedHackState.active = false
@@ -1412,7 +1541,7 @@ function SetMemorySpeedHack(enabled)
             _G.SpeedHackState.timer = nil
         end
 
-        UnhookMovementComponent()
+        UnhookAll()
 
         if _G.SpeedHackState.currentChar then
             RemoveSpeedModify(_G.SpeedHackState.currentChar)
@@ -1427,14 +1556,7 @@ function SetMemorySpeedPercent(val)
     _G.MemoryConfig.SpeedPercent = val
     if _G.MemoryConfig.SpeedHack and _G.SpeedHackState.currentChar then
         ApplySpeedModify(_G.SpeedHackState.currentChar)
-        pcall(function()
-            local char = _G.SpeedHackState.currentChar
-            local mov = char.STCharacterMovement or char.CharacterMovement
-            if slua.isValid(mov) then
-                mov.MaxWalkSpeed = 600 * (val / 100.0)
-                mov.MaxFlySpeed  = 700 * (val / 100.0)
-            end
-        end)
+        ForceSpeed(_G.SpeedHackState.currentChar)
     end
 end
 
