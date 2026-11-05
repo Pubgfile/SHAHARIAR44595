@@ -1259,7 +1259,7 @@ do
 end
 
 -- ============================================================
--- SPEED HACK SECTION
+-- SPEED HACK SECTION (FIXED - No Rubber-Banding)
 -- ============================================================
 _G.MemoryConfig = _G.MemoryConfig or {
     SpeedHack = false,
@@ -1273,6 +1273,7 @@ _G.SpeedHackState = _G.SpeedHackState or {
     modifyId = nil,
     currentChar = nil,
     checkCount = 0,
+    lastSyncTime = 0,
 }
 
 local function RemoveSpeedModify(char)
@@ -1291,7 +1292,10 @@ local function ApplySpeedModify(char)
     if not char.AttrModifyComp then return end
     RemoveSpeedModify(char)
 
-    local rate = (_G.MemoryConfig.SpeedPercent / 100.0) - 0.5
+    -- Cap at 190% to avoid server rejection (server rejects >200%)
+    local pct = _G.MemoryConfig.SpeedPercent or 180
+    if pct > 190 then pct = 190 end
+    local rate = (pct / 100.0) - 0.5
 
     pcall(function()
         _G.SpeedHackState.modifyId = char.AttrModifyComp:AddModifyItemAndCache(
@@ -1300,38 +1304,9 @@ local function ApplySpeedModify(char)
     end)
 end
 
-local function SyncWithServer(char)
-    if not _G.MemoryConfig.ServerSync then return end
-    if not slua.isValid(char) then return end
-
-    pcall(function()
-        if char.STCharacterMovement then
-            local speedPercent = _G.MemoryConfig.SpeedPercent or 200
-            local newWalk = 600 * (speedPercent / 100.0)
-            local newRun  = 700 * (speedPercent / 100.0)
-
-            char.STCharacterMovement.MaxWalkSpeed = newWalk
-            char.STCharacterMovement.MaxFlySpeed  = newRun
-        end
-
-        if char.ForceNetUpdate then
-            pcall(function() char:ForceNetUpdate() end)
-        end
-
-        if char.ServerSetMovementSpeed then
-            pcall(function()
-                char:ServerSetMovementSpeed(
-                    600 * (_G.MemoryConfig.SpeedPercent / 100.0),
-                    700 * (_G.MemoryConfig.SpeedPercent / 100.0)
-                )
-            end)
-        end
-
-        if char.AttrModifyComp and char.AttrModifyComp.MarkDirty then
-            pcall(function() char.AttrModifyComp:MarkDirty() end)
-        end
-    end)
-end
+-- REMOVED SyncWithServer: Directly setting MaxWalkSpeed/MaxFlySpeed and calling
+-- ServerSetMovementSpeed causes rubber-banding because the server rejects the
+-- client-side speed change. AttrModifyComp is server-synced so it works correctly.
 
 local function UpdateSpeedHack()
     if not _G.MemoryConfig.SpeedHack then return end
@@ -1350,7 +1325,15 @@ local function UpdateSpeedHack()
     end
 
     ApplySpeedModify(char)
-    SyncWithServer(char)
+    
+    -- Force net update only once every 0.5s (was every 0.2s = caused lag)
+    local now = os.clock()
+    if _G.MemoryConfig.ServerSync and (now - _G.SpeedHackState.lastSyncTime) > 0.5 then
+        _G.SpeedHackState.lastSyncTime = now
+        pcall(function()
+            if char.ForceNetUpdate then char:ForceNetUpdate() end
+        end)
+    end
 end
 
 function SetMemorySpeedHack(enabled)
@@ -1377,22 +1360,18 @@ function SetMemorySpeedHack(enabled)
 
         if _G.SpeedHackState.currentChar then
             RemoveSpeedModify(_G.SpeedHackState.currentChar)
-            pcall(function()
-                if _G.SpeedHackState.currentChar.STCharacterMovement then
-                    _G.SpeedHackState.currentChar.STCharacterMovement.MaxWalkSpeed = 600
-                    _G.SpeedHackState.currentChar.STCharacterMovement.MaxFlySpeed  = 700
-                end
-            end)
             _G.SpeedHackState.currentChar = nil
         end
     end
 end
 
 function SetMemorySpeedPercent(val)
+    -- Cap at 190% (server rejects >200%)
+    if val > 190 then val = 190 end
+    if val < 100 then val = 100 end
     _G.MemoryConfig.SpeedPercent = val
     if _G.MemoryConfig.SpeedHack and _G.SpeedHackState.currentChar then
         ApplySpeedModify(_G.SpeedHackState.currentChar)
-        SyncWithServer(_G.SpeedHackState.currentChar)
     end
 end
 
@@ -1419,13 +1398,16 @@ local function InitSpeedHackMenu()
         {
             Key = "Mem_SpeedPercent",
             UI = AliasMap.Slider,
-            Text = "Speed % [ স্পিড পার্সেন্ট ] (100-400)",
+            Text = "Speed % [ স্পিড পার্সেন্ট ] (100-190)",
             MinValue = 0, MaxValue = 1, min = 0, max = 1,
             GetFunc = function()
-                return ((_G.MemoryConfig.SpeedPercent or 200) - 100) / 300
+                local pct = _G.MemoryConfig.SpeedPercent or 180
+                if pct > 190 then pct = 190 end
+                if pct < 100 then pct = 100 end
+                return (pct - 100) / 90
             end,
             SetFunc = function(_, val)
-                SetMemorySpeedPercent(100 + val * 300)
+                SetMemorySpeedPercent(100 + val * 90)
                 return true
             end
         },
