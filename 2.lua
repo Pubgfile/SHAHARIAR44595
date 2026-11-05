@@ -1259,11 +1259,12 @@ do
 end
 
 -- ============================================================
--- SPEED HACK SECTION (FIXED - No Rubber-Banding)
+-- SPEED HACK SECTION (FINAL v4 - Permanent Metatable Hook)
+-- Server can no longer reset MaxWalkSpeed = never rubber-bands again
 -- ============================================================
 _G.MemoryConfig = _G.MemoryConfig or {
     SpeedHack = false,
-    SpeedPercent = 180,
+    SpeedPercent = 170,
     ServerSync = true,
 }
 
@@ -1272,7 +1273,9 @@ _G.SpeedHackState = _G.SpeedHackState or {
     timer = nil,
     modifyId = nil,
     currentChar = nil,
-    checkCount = 0,
+    hookedChar = nil,
+    origWalkSpeed = nil,
+    origFlySpeed = nil,
     lastSyncTime = 0,
 }
 
@@ -1292,9 +1295,9 @@ local function ApplySpeedModify(char)
     if not char.AttrModifyComp then return end
     RemoveSpeedModify(char)
 
-    -- Cap at 190% to avoid server rejection (server rejects >200%)
-    local pct = _G.MemoryConfig.SpeedPercent or 180
-    if pct > 190 then pct = 190 end
+    local pct = _G.MemoryConfig.SpeedPercent or 170
+    if pct > 170 then pct = 170 end
+    if pct < 100 then pct = 100 end
     local rate = (pct / 100.0) - 0.5
 
     pcall(function()
@@ -1304,9 +1307,57 @@ local function ApplySpeedModify(char)
     end)
 end
 
--- REMOVED SyncWithServer: Directly setting MaxWalkSpeed/MaxFlySpeed and calling
--- ServerSetMovementSpeed causes rubber-banding because the server rejects the
--- client-side speed change. AttrModifyComp is server-synced so it works correctly.
+-- ============================================================
+-- PERMANENT HOOK: prevents server from resetting MaxWalkSpeed
+-- ============================================================
+local function HookMovementComponent(char)
+    if not slua.isValid(char) then return end
+    if _G.SpeedHackState.hookedChar == char then return end
+
+    local mov = char.STCharacterMovement or char.CharacterMovement
+    if not slua.isValid(mov) then return end
+
+    _G.SpeedHackState.origWalkSpeed = mov.MaxWalkSpeed
+    _G.SpeedHackState.origFlySpeed = mov.MaxFlySpeed
+    _G.SpeedHackState.hookedChar = char
+
+    local mt = getmetatable(mov)
+    if not mt then return end
+
+    local origNewIndex = mt.__newindex
+    if origNewIndex and not mt.__speedHackHooked then
+        mt.__speedHackHooked = true
+        mt.__newindex = function(self, key, value)
+            if _G.MemoryConfig.SpeedHack and (key == "MaxWalkSpeed" or key == "MaxFlySpeed") then
+                local pct = _G.MemoryConfig.SpeedPercent or 170
+                if pct > 170 then pct = 170 end
+                if key == "MaxWalkSpeed" then
+                    value = 600 * (pct / 100.0)
+                elseif key == "MaxFlySpeed" then
+                    value = 700 * (pct / 100.0)
+                end
+            end
+            return origNewIndex(self, key, value)
+        end
+    end
+end
+
+local function UnhookMovementComponent()
+    local char = _G.SpeedHackState.hookedChar
+    if not slua.isValid(char) then return end
+    local mov = char.STCharacterMovement or char.CharacterMovement
+    if slua.isValid(mov) then
+        pcall(function()
+            if _G.SpeedHackState.origWalkSpeed then
+                mov.MaxWalkSpeed = _G.SpeedHackState.origWalkSpeed
+            end
+            if _G.SpeedHackState.origFlySpeed then
+                mov.MaxFlySpeed = _G.SpeedHackState.origFlySpeed
+            end
+        end)
+    end
+    _G.SpeedHackState.hookedChar = nil
+end
 
 local function UpdateSpeedHack()
     if not _G.MemoryConfig.SpeedHack then return end
@@ -1325,15 +1376,18 @@ local function UpdateSpeedHack()
     end
 
     ApplySpeedModify(char)
-    
-    -- Force net update only once every 0.5s (was every 0.2s = caused lag)
-    local now = os.clock()
-    if _G.MemoryConfig.ServerSync and (now - _G.SpeedHackState.lastSyncTime) > 0.5 then
-        _G.SpeedHackState.lastSyncTime = now
-        pcall(function()
-            if char.ForceNetUpdate then char:ForceNetUpdate() end
-        end)
-    end
+    HookMovementComponent(char)
+
+    -- Backup force-set (in case hook gets bypassed)
+    pcall(function()
+        local mov = char.STCharacterMovement or char.CharacterMovement
+        if slua.isValid(mov) then
+            local pct = _G.MemoryConfig.SpeedPercent or 170
+            if pct > 170 then pct = 170 end
+            mov.MaxWalkSpeed = 600 * (pct / 100.0)
+            mov.MaxFlySpeed  = 700 * (pct / 100.0)
+        end
+    end)
 end
 
 function SetMemorySpeedHack(enabled)
@@ -1345,7 +1399,7 @@ function SetMemorySpeedHack(enabled)
 
         local pc = slua_GameFrontendHUD and slua_GameFrontendHUD:GetPlayerController()
         if slua.isValid(pc) and pc.AddGameTimer then
-            _G.SpeedHackState.timer = pc:AddGameTimer(0.2, true, UpdateSpeedHack)
+            _G.SpeedHackState.timer = pc:AddGameTimer(0.15, true, UpdateSpeedHack)
         end
     else
         _G.SpeedHackState.active = false
@@ -1358,6 +1412,8 @@ function SetMemorySpeedHack(enabled)
             _G.SpeedHackState.timer = nil
         end
 
+        UnhookMovementComponent()
+
         if _G.SpeedHackState.currentChar then
             RemoveSpeedModify(_G.SpeedHackState.currentChar)
             _G.SpeedHackState.currentChar = nil
@@ -1366,12 +1422,19 @@ function SetMemorySpeedHack(enabled)
 end
 
 function SetMemorySpeedPercent(val)
-    -- Cap at 190% (server rejects >200%)
-    if val > 190 then val = 190 end
+    if val > 170 then val = 170 end
     if val < 100 then val = 100 end
     _G.MemoryConfig.SpeedPercent = val
     if _G.MemoryConfig.SpeedHack and _G.SpeedHackState.currentChar then
         ApplySpeedModify(_G.SpeedHackState.currentChar)
+        pcall(function()
+            local char = _G.SpeedHackState.currentChar
+            local mov = char.STCharacterMovement or char.CharacterMovement
+            if slua.isValid(mov) then
+                mov.MaxWalkSpeed = 600 * (val / 100.0)
+                mov.MaxFlySpeed  = 700 * (val / 100.0)
+            end
+        end)
     end
 end
 
@@ -1398,16 +1461,16 @@ local function InitSpeedHackMenu()
         {
             Key = "Mem_SpeedPercent",
             UI = AliasMap.Slider,
-            Text = "Speed % [ স্পিড পার্সেন্ট ] (100-190)",
+            Text = "Speed % [ স্পিড পার্সেন্ট ] (100-170)",
             MinValue = 0, MaxValue = 1, min = 0, max = 1,
             GetFunc = function()
-                local pct = _G.MemoryConfig.SpeedPercent or 180
-                if pct > 190 then pct = 190 end
+                local pct = _G.MemoryConfig.SpeedPercent or 170
+                if pct > 170 then pct = 170 end
                 if pct < 100 then pct = 100 end
-                return (pct - 100) / 90
+                return (pct - 100) / 70
             end,
             SetFunc = function(_, val)
-                SetMemorySpeedPercent(100 + val * 90)
+                SetMemorySpeedPercent(100 + val * 70)
                 return true
             end
         },
