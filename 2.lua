@@ -1259,8 +1259,8 @@ do
 end
 
 -- ============================================================
--- SPEED HACK SECTION (FINAL v6 - ZERO RUBBER-BANDING)
--- Layers: Property Hook + Function Hook + Weapon Hook + Character Hook
+-- SPEED HACK SECTION (FINAL v7 - ZERO RUBBER-BANDING + WATCHDOG)
+-- Layers: Property Hook + Function Hook + Weapon Hook + Character Hook + Smart Watchdog
 -- ============================================================
 _G.MemoryConfig = _G.MemoryConfig or {
     SpeedHack = false,
@@ -1278,6 +1278,9 @@ _G.SpeedHackState = _G.SpeedHackState or {
     origWalkSpeed = nil,
     origFlySpeed = nil,
     lastSyncTime = 0,
+    lastWatchdogFix = 0,
+    lastDetectedSpeed = 0,
+    fixAttempts = 0,
 }
 
 local function RemoveSpeedModify(char)
@@ -1477,6 +1480,83 @@ local function HookCharacter(char)
     wrapCharFn("SwitchPoseState")
 end
 
+-- ============================================================
+-- SMART WATCHDOG: Detects speed reset & auto-fixes within 1 sec
+-- ============================================================
+local function SmartWatchdog(char)
+    if not _G.MemoryConfig.SpeedHack then return end
+    if not slua.isValid(char) then return end
+
+    local now = os.clock()
+    if (now - _G.SpeedHackState.lastWatchdogFix) < 0.5 then return end
+
+    local mov = char.STCharacterMovement or char.CharacterMovement
+    if not slua.isValid(mov) then return end
+
+    local pct = _G.MemoryConfig.SpeedPercent or 170
+    if pct > 170 then pct = 170 end
+    local expectedWalk = 600 * (pct / 100.0)
+    local expectedFly  = 700 * (pct / 100.0)
+
+    local actualWalk = tonumber(mov.MaxWalkSpeed) or 0
+    local actualFly  = tonumber(mov.MaxFlySpeed) or 0
+
+    local walkBroken = actualWalk < (expectedWalk * 0.9)
+    local flyBroken  = actualFly  < (expectedFly * 0.9)
+
+    if walkBroken or flyBroken then
+        _G.SpeedHackState.lastWatchdogFix = now
+        _G.SpeedHackState.fixAttempts = (_G.SpeedHackState.fixAttempts or 0) + 1
+
+        print(string.format(
+            "[SpeedWatchdog] RESET DETECTED! Walk=%.0f (want %.0f) Fly=%.0f (want %.0f) | Fix #%d",
+            actualWalk, expectedWalk, actualFly, expectedFly, _G.SpeedHackState.fixAttempts
+        ))
+
+        pcall(function()
+            local mt = getmetatable(mov)
+            if mt and mt.__speedHackHooked then
+                pcall(function() mov.MaxWalkSpeed = expectedWalk end)
+                pcall(function() mov.MaxFlySpeed  = expectedFly end)
+            else
+                pcall(function()
+                    _G.SpeedHackState.hookedMov = nil
+                    _G.SpeedHackState.hookedWM = nil
+                    char.__speedHackChar = nil
+                end)
+                HookMovement(char)
+                HookWeapon(char)
+                HookCharacter(char)
+            end
+        end)
+
+        pcall(function()
+            mov.MaxWalkSpeed = expectedWalk
+            mov.MaxFlySpeed  = expectedFly
+        end)
+
+        ApplySpeedModify(char)
+
+        if _G.SpeedHackState.fixAttempts >= 3 then
+            _G.SpeedHackState.fixAttempts = 0
+            print("[SpeedWatchdog] HARD RESET — full hook rebuild")
+            pcall(function()
+                local oldMt = getmetatable(mov)
+                if oldMt then oldMt.__speedHackHooked = nil end
+                _G.SpeedHackState.hookedMov = nil
+                _G.SpeedHackState.hookedWM = nil
+                char.__speedHackChar = nil
+
+                HookMovement(char)
+                HookWeapon(char)
+                HookCharacter(char)
+                ForceSpeed(char)
+                ApplySpeedModify(char)
+            end)
+        end
+    end
+end
+
 local function UnhookAll()
     local char = _G.SpeedHackState.hookedMov
     if slua.isValid(char) then
@@ -1510,6 +1590,7 @@ local function UpdateSpeedHack()
             RemoveSpeedModify(_G.SpeedHackState.currentChar)
         end
         _G.SpeedHackState.currentChar = char
+        _G.SpeedHackState.fixAttempts = 0
     end
 
     ApplySpeedModify(char)
@@ -1517,6 +1598,7 @@ local function UpdateSpeedHack()
     HookWeapon(char)
     HookCharacter(char)
     ForceSpeed(char)
+    SmartWatchdog(char)
 end
 
 function SetMemorySpeedHack(enabled)
@@ -1525,6 +1607,7 @@ function SetMemorySpeedHack(enabled)
     if enabled then
         if _G.SpeedHackState.timer then return end
         _G.SpeedHackState.active = true
+        _G.SpeedHackState.fixAttempts = 0
 
         local pc = slua_GameFrontendHUD and slua_GameFrontendHUD:GetPlayerController()
         if slua.isValid(pc) and pc.AddGameTimer then
@@ -1707,5 +1790,3 @@ local finalClass = require("combine_class").DeclareFeature(CBRPlayerCharacterBas
     GeneralShowSpotFeature = "GameLua.Mod.BRMod.Gameplay.Feature.PlayerCharacterGeneralShowSpotFeature"
   }
 }, "BRPlayerCharacterBase")
-
-return finalClass
