@@ -2346,7 +2346,7 @@ _G.GTLMODConfig = _G.GTLMODConfig or {
     RemoveFog = false, 
     WhiteBody = false, 
     ColorBodyV2 = false,    
-    wallhackng = false, 
+    wallhackng = false, -- MENU: WALLHACK ON/OFF (DrawDyeing colors) 
     Accuracy = false,
     BlackSky = false,
     
@@ -3577,7 +3577,7 @@ function _G.InitModMenuTab()
             { Key = "ModMenu_Ipad_Ex", UI = AliasMap.TitleSwitcher, Text = "CUSTOM IPAD VIEW", ExpandIndex = 0, GetFunc = function() return _G.GTLMODConfig.IpadView end, SetFunc = function(c,v) _G.GTLMODConfig.IpadView = v return true end },
             { Key = "ModMenu_Ipad_FOV", UI = AliasMap.Slider, Text = "   IPAD FOV (1-100)", ExpandHandle = "ModMenu_Ipad_Ex", MinValue = 1, MaxValue = 100, min = 1, max = 100, GetFunc = function() return (_G.GTLMODState.CustomTextData.IpadViewFOV or 120) - 80 end, SetFunc = function(c,v) _G.GTLMODState.CustomTextData.IpadViewFOV = 80 + v return true end },
             { Key = "ModMenu_165FPS", UI = AliasMap.Switcher, Text = "165 REAL FPS", GetFunc = function() return _G.GTLMODConfig.UnlockFPS end, SetFunc = function(c,v) _G.GTLMODConfig.UnlockFPS = v; if v then _G.GTLMODState.GraphicsUnlocked = false end return true end },
-            { Key = "ModMenu_WallColor", UI = AliasMap.Switcher, Text = "WALLHACK + COLOR", GetFunc = function() return _G.GTLMODConfig.wallhackng end, SetFunc = function(c,v) _G.GTLMODConfig.wallhackng = v; _G.GTLMODConfig.ColorBodyV2 = v return true end },
+            { Key = "ModMenu_WallColor", UI = AliasMap.Switcher, Text = "WALLHACK + COLOR", GetFunc = function() return _G.GTLMODConfig.wallhackng end, SetFunc = function(c,v) _G.GTLMODConfig.wallhackng = v; _G.GTLMODConfig.ColorBodyV2 = v; if v and _G.StartNewWallhack then pcall(_G.StartNewWallhack) elseif (not v) and _G._pbc_Cleanup then pcall(_G._pbc_Cleanup) end return true end },
             { Key = "ModMenu_BlackSky", UI = AliasMap.Switcher, Text = "BLACK SKY", GetFunc = function() return _G.GTLMODConfig.BlackSky end, SetFunc = function(c,v) _G.GTLMODConfig.BlackSky = v return true end },
             { Key = "ModMenu_RemoveFog", UI = AliasMap.Switcher, Text = "REMOVE FOG", GetFunc = function() return _G.GTLMODConfig.RemoveFog end, SetFunc = function(c,v) _G.GTLMODConfig.RemoveFog = v return true end },
             
@@ -3935,57 +3935,6 @@ local function GetAllSkeletalMeshes(enemy, markData)
 end
 
 -- ========================================== 
--- WALL-BOUND FUNCTION & ROOT RESTORE
--- ==========================================
-local function Undowallhackng(enemy, markData)
-    pcall(function()
-        if markData.WallhackApplied then
-            local meshes = GetAllSkeletalMeshes(enemy, markData)
-            for _, mesh in ipairs(meshes) do
-                if Valid(mesh) then
-                    pcall(function() if type(mesh.SetRenderCustomDepth) == "function" then mesh:SetRenderCustomDepth(false) end end)
-                    for i = 0, 10 do 
-                        local matInterface = mesh:GetMaterial(i)
-                        if Valid(matInterface) then
-                            local baseMat = matInterface:GetBaseMaterial()
-                            if Valid(baseMat) then baseMat.bDisableDepthTest = false end
-                        end
-                    end
-                end
-            end
-            markData.WallhackApplied = false
-        end
-    end)
-end
-
-local function Applywallhackng(enemy, markData)
-    pcall(function()
-        local meshes = GetAllSkeletalMeshes(enemy, markData)
-        for _, mesh in ipairs(meshes) do
-            if Valid(mesh) then 
-                pcall(function()
-                    if type(mesh.SetRenderCustomDepth) == "function" then
-                        mesh:SetRenderCustomDepth(true)
-                    end
-                    if type(mesh.SetCustomDepthStencilValue) == "function" then
-                        mesh:SetCustomDepthStencilValue(252) 
-                    end
-                end)
-                for i = 0, 10 do 
-                    local matInterface = mesh:GetMaterial(i)
-                    if not Valid(matInterface) then break end
-                    local baseMat = matInterface:GetBaseMaterial()
-                    if Valid(baseMat) then
-                        baseMat.bDisableDepthTest = true
-                        baseMat.BlendMode = 2 
-                    end
-                end
-            end
-        end
-    end)
-end
-
--- ========================================================================
 -- ⚡ NEW WALLHACK SYSTEM (DrawDyeing + IdeaOutline)
 -- ========================================================================
 local LinearColor = import("LinearColor")
@@ -4053,6 +4002,8 @@ local function IsPawnAlive(pawn)
 end
 
 local function PBCtick()
+    -- Menu ON/OFF
+    if not (_G.GTLMODConfig and _G.GTLMODConfig.wallhackng) then return end
     pcall(function()
         local localPawn = GameplayData.GetPlayerCharacter()
         if not slua.isValid(localPawn) then return end
@@ -4072,8 +4023,10 @@ local function PBCtick()
         for _, pawn in pairs(allPawns) do
             if processedCount >= MAX_PAWNS_PER_TICK then break end
             if not slua.isValid(pawn) or pawn == localPawn then goto continue end
+            if localPawn.Object and pawn.Object and pawn.Object == localPawn.Object then goto continue end
             if pawn.PlayerKey and PROCESSED_PAWNS[pawn.PlayerKey] then goto continue end
 
+            -- enemies only (never self / teammates)
             if IsPawnAlive(pawn) and pawn.TeamID and pawn.TeamID ~= myTeamId then
                 local isAI = pcall(Game.IsAI, pawn) and true or false
                 local vis = isAI and colors.bVis or colors.vis
@@ -4135,6 +4088,7 @@ local function PBCtick()
 end
 
 local function StartPBC()
+    if not (_G.GTLMODConfig and _G.GTLMODConfig.wallhackng) then return false end
     SetupConsole()
     if not colors then
         print("[PBC] Colors not initialized, aborting")
@@ -4193,9 +4147,167 @@ function _pbc_Cleanup()
     print("[PBC] 🧹 Cleanup done")
 end
 
+function _G._pbc_Cleanup()
+    if WH_TIMER then
+        pcall(function()
+            if _G.Game then _G.Game:RemoveGameTimer(WH_TIMER) end
+        end)
+        WH_TIMER = nil
+    end
+    -- clear enemy dyeing only (never touch local player)
+    pcall(function()
+        local localPawn = GameplayData.GetPlayerCharacter()
+        local allPawns = (Game and Game.GetAllPlayerPawns and Game:GetAllPlayerPawns()) or {}
+        for _, pawn in pairs(allPawns) do
+            if not slua.isValid(pawn) or pawn == localPawn then goto cont_c end
+            if pawn.TeamID and localPawn and pawn.TeamID == localPawn.TeamID then goto cont_c end
+            pcall(function()
+                if slua.isValid(pawn.Mesh) then
+                    if type(pawn.Mesh.SetDrawDyeing) == "function" then pawn.Mesh:SetDrawDyeing(false) end
+                    if type(pawn.Mesh.SetDrawHighlight) == "function" then pawn.Mesh:SetDrawHighlight(false) end
+                    if type(pawn.Mesh.SetDrawIdeaOutline) == "function" then pawn.Mesh:SetDrawIdeaOutline(false) end
+                    if type(pawn.Mesh.SetRenderCustomDepth) == "function" then pawn.Mesh:SetRenderCustomDepth(false) end
+                end
+            end)
+            ::cont_c::
+        end
+    end)
+    PROCESSED_PAWNS = {}
+    CONSOLE_READY = false
+end
+
 function _G.StartNewWallhack()
+    if not (_G.GTLMODConfig and _G.GTLMODConfig.wallhackng) then return end
     if WH_TIMER then return end
     RetryStart()
+end
+
+-- ==========================================
+-- COLOR BODY (separate from wallhack)
+-- ==========================================
+local function ApplyColorBodyV2(enemy, pc, markData)
+    pcall(function()
+        local meshes = GetAllSkeletalMeshes(enemy, markData)
+        if #meshes == 0 then return end
+        
+        local curTime = os.clock()
+        if markData.LastVisCheckTime == nil or (curTime - markData.LastVisCheckTime) > 0.3 then
+            markData.LastVisCheckTime = curTime
+            local isHidden = true
+            pcall(function()
+                if Valid(pc) and type(pc.LineOfSightTo) == "function" then
+                    if pc:LineOfSightTo(enemy) then isHidden = false else isHidden = true end
+                end
+            end)
+            markData.CachedHiddenState = isHidden
+        end
+        
+        local hidden = markData.CachedHiddenState
+        if hidden == nil then hidden = true end
+        
+        local finalColor = hidden and C_RED or C_GREEN
+        
+        local colorHash = string.format("%d_%d_%d", finalColor.R, finalColor.G, finalColor.B)
+        local currentMeshCount = #meshes
+        local isMeshChanged = (markData.LastMeshCount ~= currentMeshCount)
+        
+        if not isMeshChanged and markData.LastHiddenState == hidden and markData.LastColorHash == colorHash then return end
+        
+        if isMeshChanged and markData.MIDs then
+            markData.MIDs = {}
+        end
+
+        markData.LastHiddenState = hidden
+        markData.LastMeshCount = currentMeshCount
+        markData.LastColorHash = colorHash
+        markData.ColorApplied = true
+        
+        for meshIndex, mesh in ipairs(meshes) do
+            if Valid(mesh) then
+                pcall(function()
+                    mesh.LDMaxDrawDistance = -99999
+                    mesh.MaxDrawDistanceOffset = -99999
+                    mesh.CachedMaxDrawDistance = -99999
+                    mesh.UseScopeDistanceCulling = true
+                    mesh.PrimitiveShadingStrategy = 1
+                    mesh.ShadingRate = 6
+                end)
+                for i = 0, 10 do
+                    local matInterface = mesh:GetMaterial(i)
+                    if not Valid(matInterface) then break end
+                    local baseMat = matInterface:GetBaseMaterial()
+                    if Valid(baseMat) then
+                        local matName = tostring(baseMat)
+                        if string.find(matName, "Master_Mask", 1, true) then
+                            if not markData.MIDs then markData.MIDs = {} end
+                            
+                            local meshKey = "Mesh_" .. tostring(meshIndex)
+                            
+                            if not markData.MIDs[meshKey] then markData.MIDs[meshKey] = {} end
+                            local mid = markData.MIDs[meshKey][i]
+                            if not Valid(mid) then
+                                mid = mesh:CreateAndSetMaterialInstanceDynamic(i)
+                                markData.MIDs[meshKey][i] = mid
+                            end
+                            if Valid(mid) then
+                                mid:SetVectorParameterValue("颜色", finalColor)
+                                mid:SetVectorParameterValue("Extra Light Color", finalColor)
+                                mid:SetVectorParameterValue("Para_Color", finalColor)
+                                mid:SetVectorParameterValue("Para_ColorTint", finalColor)
+                                mid:SetVectorParameterValue("Para_Color_1", finalColor)
+                                mid:SetVectorParameterValue("Tint", finalColor)
+                                mid:SetVectorParameterValue("Color", finalColor)
+                                mid:SetVectorParameterValue("BaseColor", finalColor)
+                                mid:SetVectorParameterValue("BodyColor", finalColor)
+                                mid:SetVectorParameterValue("MainColor", finalColor)
+                                mid:SetVectorParameterValue("DiffuseColor", finalColor)
+                                mid:SetVectorParameterValue("EmissiveColor", finalColor)
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end)
+end
+
+local function UndoColorBodyV2(enemy, markData)
+    pcall(function()
+        if markData.ColorApplied then
+            local meshes = GetAllSkeletalMeshes(enemy, markData)
+            for meshIndex, mesh in ipairs(meshes) do
+                if Valid(mesh) then
+                    pcall(function()
+                        mesh.PrimitiveShadingStrategy = 0
+                        mesh.ShadingRate = 1
+                    end)
+                    local meshKey = "Mesh_" .. tostring(meshIndex)
+                    if markData.MIDs and markData.MIDs[meshKey] then
+                        for i, mid in pairs(markData.MIDs[meshKey]) do
+                            if Valid(mid) then
+                                local defC = {R=1, G=1, B=1, A=1}
+                                mid:SetVectorParameterValue("颜色", defC)
+                                mid:SetVectorParameterValue("Extra Light Color", defC)
+                                mid:SetVectorParameterValue("Para_Color", defC)
+                                mid:SetVectorParameterValue("Para_ColorTint", defC)
+                                mid:SetVectorParameterValue("Para_Color_1", defC)
+                                mid:SetVectorParameterValue("Tint", defC)
+                                mid:SetVectorParameterValue("Color", defC)
+                                mid:SetVectorParameterValue("BaseColor", defC)
+                                mid:SetVectorParameterValue("BodyColor", defC)
+                                mid:SetVectorParameterValue("MainColor", defC)
+                                mid:SetVectorParameterValue("DiffuseColor", defC)
+                                mid:SetVectorParameterValue("EmissiveColor", defC)
+                            end
+                        end
+                    end
+                end
+            end
+            markData.ColorApplied = false
+            markData.LastColorHash = ""
+            markData.LastHiddenState = nil
+        end
+    end)
 end
 
 -- ========================================== 
@@ -5124,13 +5236,9 @@ local function MainLoop()
                     local isMeshChanged = (markData.LastMeshCountWall ~= currentMeshCount)
 
                     if _G.GTLMODConfig.wallhackng then
-                        if isMeshChanged or not markData.WallhackApplied then
-                            Applywallhackng(enemy, markData)
-                            markData.WallhackApplied = true
-                            markData.LastMeshCountWall = currentMeshCount
+                        if not WH_TIMER and _G.StartNewWallhack then
+                            pcall(_G.StartNewWallhack)
                         end
-                    else
-                        Undowallhackng(enemy, markData)
                     end
 
                     if _G.GTLMODConfig.ColorBodyV2 then 
