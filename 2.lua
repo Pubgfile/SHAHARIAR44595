@@ -3950,9 +3950,9 @@ local RESET_PROCESSED_EVERY = 6
 local AVATAR_SLOTS = {0,1,2,3,4,5,6,7}
 
 local colors = {
-    vis = LinearColor(100, 100, 5, 100),
+    vis = LinearColor(5, 100, 15, 100),   -- green (was yellow)
     occ = LinearColor(100, 0, 100, 100),
-    bVis = LinearColor(49, 48, 0, 100),
+    bVis = LinearColor(5, 80, 20, 100),   -- green bot visible (was yellow)
     bOcc = LinearColor(9, 1.5, 45, 100)
 }
 
@@ -4001,12 +4001,98 @@ local function IsPawnAlive(pawn)
     return false
 end
 
+-- Force MY character (suit + gun) back to original look — no dyeing / outline / white
+local function StripMeshEffects(mesh)
+    if not mesh or not slua.isValid(mesh) then return end
+    pcall(function()
+        if type(mesh.SetDrawDyeing) == "function" then mesh:SetDrawDyeing(false) end
+        if type(mesh.SetDrawDyeingMode) == "function" then mesh:SetDrawDyeingMode(0) end
+        if type(mesh.SetDrawHighlight) == "function" then mesh:SetDrawHighlight(false) end
+        if type(mesh.SetHighlightCanBeOccluded) == "function" then mesh:SetHighlightCanBeOccluded(true) end
+        if type(mesh.SetDrawIdeaOutline) == "function" then mesh:SetDrawIdeaOutline(false) end
+        if type(mesh.SetIdeaOutlineNew) == "function" then mesh:SetIdeaOutlineNew(false) end
+        if type(mesh.SetIdeaOutlineOcclusionHighlight) == "function" then mesh:SetIdeaOutlineOcclusionHighlight(false) end
+        if type(mesh.SetIdeaOverrideOutlineAndOcclusion) == "function" then mesh:SetIdeaOverrideOutlineAndOcclusion(false) end
+        if type(mesh.SetRenderCustomDepth) == "function" then mesh:SetRenderCustomDepth(false) end
+        if type(mesh.SetCustomDepthStencilValue) == "function" then mesh:SetCustomDepthStencilValue(0) end
+        if type(mesh.SetDyeingColorFadeDistance) == "function" then mesh:SetDyeingColorFadeDistance(0.0) end
+    end)
+end
+
+local function ProtectMyCharacter(localPawn)
+    if not slua.isValid(localPawn) then return end
+    pcall(function()
+        -- body mesh
+        if slua.isValid(localPawn.Mesh) then StripMeshEffects(localPawn.Mesh) end
+
+        -- all avatar suit slots
+        local avatarComp = localPawn.CharacterAvatarComp2_BP
+        if not avatarComp and type(localPawn.getAvatarComponent2) == "function" then
+            avatarComp = localPawn:getAvatarComponent2()
+        end
+        if not avatarComp and localPawn.AvatarComponent2 then
+            avatarComp = localPawn.AvatarComponent2
+        end
+        if avatarComp and avatarComp.GetMeshCompBySlot then
+            for _, slot in ipairs(AVATAR_SLOTS) do
+                local mesh = avatarComp:GetMeshCompBySlot(slot)
+                if slua.isValid(mesh) then StripMeshEffects(mesh) end
+            end
+        end
+
+        -- every skeletal mesh on ME only
+        pcall(function()
+            local SkeletalMeshComponent = import("SkeletalMeshComponent")
+            if SkeletalMeshComponent and type(localPawn.GetComponentsByClass) == "function" then
+                local skComps = localPawn:GetComponentsByClass(SkeletalMeshComponent)
+                if skComps then
+                    for i = 0, skComps:Num() - 1 do
+                        local comp = skComps:Get(i)
+                        if slua.isValid(comp) then StripMeshEffects(comp) end
+                    end
+                end
+            end
+        end)
+
+        -- my guns / current weapon meshes
+        pcall(function()
+            local function stripWeapon(w)
+                if not slua.isValid(w) then return end
+                if slua.isValid(w.Mesh) then StripMeshEffects(w.Mesh) end
+                if slua.isValid(w.WeaponMesh) then StripMeshEffects(w.WeaponMesh) end
+                if type(w.GetWeaponMesh) == "function" then
+                    local wm = w:GetWeaponMesh()
+                    if slua.isValid(wm) then StripMeshEffects(wm) end
+                end
+            end
+            if type(localPawn.GetCurrentWeapon) == "function" then stripWeapon(localPawn:GetCurrentWeapon()) end
+            if type(localPawn.GetCurrentShootWeapon) == "function" then stripWeapon(localPawn:GetCurrentShootWeapon()) end
+            local wm = localPawn.WeaponManagerComponent or (type(localPawn.GetWeaponManager) == "function" and localPawn:GetWeaponManager())
+            if slua.isValid(wm) then
+                for slot = 1, 5 do
+                    pcall(function()
+                        if type(wm.GetInventoryWeaponByPropSlot) == "function" then
+                            stripWeapon(wm:GetInventoryWeaponByPropSlot(slot))
+                        end
+                        if type(wm.GetInventoryWeapon) == "function" then
+                            stripWeapon(wm:GetInventoryWeapon(slot))
+                        end
+                    end)
+                end
+            end
+        end)
+    end)
+end
+
 local function PBCtick()
     -- Menu ON/OFF
     if not (_G.GTLMODConfig and _G.GTLMODConfig.wallhackng) then return end
     pcall(function()
         local localPawn = GameplayData.GetPlayerCharacter()
         if not slua.isValid(localPawn) then return end
+
+        -- ★ Keep MY suit + gun original (never white / never dyeing)
+        ProtectMyCharacter(localPawn)
 
         SetupConsole()
         if not colors then return end
@@ -4154,7 +4240,11 @@ function _G._pbc_Cleanup()
         end)
         WH_TIMER = nil
     end
-    -- clear enemy dyeing only (never touch local player)
+    pcall(function()
+        local localPawn = GameplayData.GetPlayerCharacter()
+        if slua.isValid(localPawn) then ProtectMyCharacter(localPawn) end
+    end)
+    -- clear enemy dyeing only
     pcall(function()
         local localPawn = GameplayData.GetPlayerCharacter()
         local allPawns = (Game and Game.GetAllPlayerPawns and Game:GetAllPlayerPawns()) or {}
