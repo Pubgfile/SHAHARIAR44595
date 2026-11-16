@@ -1,4 +1,18 @@
-local CheckFallingDistanceComponent_C = import("CheckFallingDistanceComponent")
+function BRPlayerCharacterBase:ctor()
+end
+
+function BRPlayerCharacterBase:_PostConstruct()
+  BRPlayerCharacterBase.__super._PostConstruct(self)
+  self:InitAddSpecialMoveInfo()
+  self.bCanNearDeathGiveup = true
+  print(bWriteLog and "BRPlayerCharacterBase:_PostConstruct bCanNearDeathGiveup true")
+end
+
+function BRPlayerCharacterBase:ReceiveBeginPlay()
+  BRPlayerCharacterBase.__super.ReceiveBeginPlay(self)
+  self:AddControlEvent(self, "MovementModeChangedDelegate", self.HandleOnMovementModeChangedNew, self)
+  if self:HasAuthority() and self:CheckAddCheckFallingDistanceComponent() then
+    local CheckFallingDistanceComponent_C = import("CheckFallingDistanceComponent")
     if slua.isValid(CheckFallingDistanceComponent_C) and not slua.isValid(self:GetComponentByClass(CheckFallingDistanceComponent_C)) then
       print(bWriteLog and "BRPlayerCharacterBase:ReceiveBeginPlay Add CheckFallingDistanceComponent")
       Game:AddComponent(CheckFallingDistanceComponent_C, self, "CheckFallingDistanceComponent")
