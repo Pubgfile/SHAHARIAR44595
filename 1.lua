@@ -1258,7 +1258,7 @@ end)()
                 if type(setForeground)=="function" then setForeground(d.Input,fg) end
                 pcall(function() d.Input:SetHintText("Enter your key") end)
                 visibility(d.Input,enums.Visible);add(d.Input,23,107,W-46,35,8,true)
-                d.Hint=text("TG: @MS_CONFIG_VIP_owners | WA: +92 [03030172053]",22,149,W-44,19,11,burgundy,7,false,false)
+                d.Hint=text("TG: @MS_CONFIG_VIP",22,149,W-44,19,11,burgundy,7,false,false)
                 d.Status=text(status or "Enter your key",22,170,W-44,23,11,burgundy,8,false,false,true)
             end
             local button=make("Button",d.Container);d.Button=button
